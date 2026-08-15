@@ -74,6 +74,11 @@ TARGETS: dict[str, tuple[str, list[str]]] = {
     "verify-log": ("verify the most recent decision log",
                    [PYTHON, "-m", "arena.eval.verify_latest"]),
 
+    # ---- live assistant
+    "live": ("the live chat assistant + Sentinel-Z dashboard",
+             [PYTHON, "-m", "arena.live.server"]),
+    "live-solo": ("live assistant + collection server on one machine", []),
+
     # ---- roles
     "attacker": ("role=attacker: the exfiltration server (laptop B)",
                  [PYTHON, "-m", "arena.exfil_server"]),
@@ -155,6 +160,21 @@ def target_solo() -> int:
         server.terminate()
 
 
+def target_live_solo(argv: list[str]) -> int:
+    """The live assistant with its own collection server, on one machine."""
+    env = {"SENTINELZ_ATTACKER_HOST": "127.0.0.1"}
+    print("starting the collection server in the background on 127.0.0.1")
+    server = subprocess.Popen(
+        [PYTHON, "-m", "arena.exfil_server"],
+        cwd=str(REPO_ROOT),
+        env={**os.environ, **CHILD_ENV, **env},
+    )
+    try:
+        return run([PYTHON, "-m", "arena.live.server", *argv], env=env)
+    finally:
+        server.terminate()
+
+
 def usage() -> int:
     print(__doc__)
     print("targets:\n")
@@ -185,6 +205,8 @@ def main(argv: list[str]) -> int:
         return target_train(rest)
     if target == "solo":
         return target_solo()
+    if target == "live-solo":
+        return target_live_solo(rest)
 
     _, command = TARGETS[target]
     if not command:

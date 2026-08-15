@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aura — AI Workspace</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<!-- One icon set, 1.5px stroke, 20px grid. Lucide geometry, inlined so the
+     page needs no icon font and no network. -->
+<svg class="hidden" aria-hidden="true">
+  <defs>
+    <g id="i-home"><path d="M3 9.5 10 4l7 5.5V16a1 1 0 0 1-1 1h-3v-5H7v5H4a1 1 0 0 1-1-1z"/></g>
+    <g id="i-chat"><path d="M17 12a2 2 0 0 1-2 2H7l-4 3V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></g>
+    <g id="i-history"><path d="M3 10a7 7 0 1 0 2-4.9M3 4v3h3"/><path d="M10 6.5V10l2.5 1.5"/></g>
+    <g id="i-bot"><rect x="4" y="7.5" width="12" height="9" rx="2"/><path d="M10 4.5v3M7.5 11.5v1M12.5 11.5v1"/><circle cx="10" cy="3.5" r="1"/></g>
+    <g id="i-folder"><path d="M3 6a1 1 0 0 1 1-1h3.2l1.4 1.8H16a1 1 0 0 1 1 1V15a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/></g>
+    <g id="i-share"><circle cx="15" cy="5" r="2"/><circle cx="5" cy="10" r="2"/><circle cx="15" cy="15" r="2"/><path d="M6.8 9 13.2 6M6.8 11l6.4 3"/></g>
+    <g id="i-db"><ellipse cx="10" cy="5.5" rx="6" ry="2.2"/><path d="M4 5.5v9c0 1.2 2.7 2.2 6 2.2s6-1 6-2.2v-9M4 10c0 1.2 2.7 2.2 6 2.2s6-1 6-2.2"/></g>
+    <g id="i-shield"><path d="M10 3l6 2.3v4.4c0 3.4-2.4 6.4-6 7.3-3.6-.9-6-3.9-6-7.3V5.3z"/><path d="M7.6 10.2 9.3 12l3.3-3.4"/></g>
+    <g id="i-help"><path d="M4 12v-2a6 6 0 0 1 12 0v2"/><path d="M4 11.5h1.6a1 1 0 0 1 1 1v2.2a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1zM16 11.5h-1.6a1 1 0 0 0-1 1v2.2a1 1 0 0 0 1 1H15a1 1 0 0 0 1-1z"/></g>
+    <g id="i-settings"><circle cx="10" cy="10" r="2.4"/><path d="M10 2.6v2M10 15.4v2M17.4 10h-2M4.6 10h-2M15.2 4.8l-1.4 1.4M6.2 13.8l-1.4 1.4M15.2 15.2l-1.4-1.4M6.2 6.2 4.8 4.8"/></g>
+    <g id="i-refresh"><path d="M16.5 8.5a6.5 6.5 0 1 0 .3 3.5"/><path d="M16.9 4.5v4h-4"/></g>
+
+    <g id="i-spark"><path d="M10 3.2l1.5 3.9 3.9 1.5-3.9 1.5L10 14l-1.5-3.9L4.6 8.6l3.9-1.5z"/><path d="M15.4 13.2l.7 1.7 1.7.7-1.7.7-.7 1.7-.7-1.7-1.7-.7 1.7-.7z"/></g>
+    <g id="i-clip"><path d="M15.5 9.3l-5.6 5.6a3.4 3.4 0 0 1-4.8-4.8l5.9-5.9a2.3 2.3 0 0 1 3.2 3.2l-5.8 5.9a1.1 1.1 0 0 1-1.6-1.6l5.2-5.2"/></g>
+    <g id="i-chevron"><path d="M6.5 8.5 10 12l3.5-3.5"/></g>
+    <g id="i-arrow-up"><path d="M10 15.5v-11M5.5 9 10 4.5 14.5 9"/></g>
+
+    <g id="i-file"><path d="M11 3H6a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V7z"/><path d="M11 3v4h4M7.5 11h5M7.5 13.5h5"/></g>
+    <g id="i-mail"><rect x="3" y="5" width="14" height="10" rx="1.5"/><path d="m3.6 6 6.4 4.6L16.4 6"/></g>
+    <g id="i-globe"><circle cx="10" cy="10" r="7"/><path d="M3.2 10h13.6M10 3.1a11 11 0 0 1 0 13.8 11 11 0 0 1 0-13.8"/></g>
+    <g id="i-search"><circle cx="9" cy="9" r="5"/><path d="m12.8 12.8 3.7 3.7"/></g>
+    <g id="i-upload"><path d="M4 13v2.5a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V13"/><path d="M10 3.5v9M6.5 7 10 3.5 13.5 7"/></g>
+    <g id="i-check"><path d="m5 10.5 3.3 3.2L15 6.8"/></g>
+    <g id="i-x"><path d="m6 6 8 8M14 6l-8 8"/></g>
+    <g id="i-loader"><path d="M10 3.2v3M10 13.8v3M16.8 10h-3M6.2 10h-3M14.8 5.2l-2.1 2.1M7.3 12.7l-2.1 2.1M14.8 14.8l-2.1-2.1M7.3 7.3 5.2 5.2"/></g>
+  </defs>
+</svg>
+
+<nav class="rail" aria-label="Primary">
+  <div class="nav">
+    <a class="rail-btn" href="/" aria-current="page" aria-label="Assistant"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-home"/></svg></a>
+    <button class="rail-btn" type="button" aria-label="Conversations" disabled><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-chat"/></svg></button>
+    <button class="rail-btn" type="button" aria-label="History" disabled><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-history"/></svg></button>
+    <button class="rail-btn" type="button" aria-label="Agents" disabled><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-bot"/></svg></button>
+    <button class="rail-btn" type="button" aria-label="Files" disabled><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-folder"/></svg></button>
+    <a class="rail-btn" href="/dashboard" target="_blank" aria-label="Sentinel-Z dashboard"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-shield"/></svg></a>
+  </div>
+  <div class="grow"></div>
+  <div class="nav">
+    <button class="rail-btn" id="btn-reset" type="button" aria-label="Start a new session"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-refresh"/></svg></button>
+    <button class="rail-btn" type="button" aria-label="Settings" disabled><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-settings"/></svg></button>
+  </div>
+</nav>
+
+<main>
+  <header class="topbar">
+    <span class="name">Aura</span>
+    <span class="sub">personal workspace assistant</span>
+    <div class="right">
+      <span class="pill" id="pill-backend">connecting</span>
+      <a class="pill ok" id="pill-defense" href="/dashboard" target="_blank"><span class="led"></span>Sentinel-Z active</a>
+    </div>
+  </header>
+
+  <div class="scroll" id="scroll">
+    <div class="col">
+      <section class="hero" id="hero">
+        <div class="orb-wrap"><canvas id="orb" width="112" height="112" aria-hidden="true"></canvas></div>
+        <h1 class="greet"><span id="greeting">Good day.</span><br><span class="accent">What's on your mind?</span></h1>
+      </section>
+      <div class="thread" id="thread"></div>
+    </div>
+  </div>
+
+  <div class="composer-dock">
+    <div class="col">
+      <form class="composer" id="composer">
+        <div class="field">
+          <svg class="spark" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-spark"/></svg>
+          <label class="sr" for="input">Message Aura</label>
+          <textarea id="input" rows="2" placeholder="Ask Aura a question or make a request…"></textarea>
+        </div>
+        <div class="tools">
+          <button class="tool" type="button" id="btn-doc">
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-clip"/></svg>
+            Attach
+          </button>
+          <button class="tool" type="button" id="btn-mail">
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-mail"/></svg>
+            Add email
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-chevron"/></svg>
+          </button>
+          <span class="grow"></span>
+          <label class="switch">
+            <input type="checkbox" id="tgl-defense" checked>
+            <span class="track"></span>
+            Sentinel-Z
+          </label>
+          <button class="send" id="btn-send" type="submit" aria-label="Send message">
+            <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-arrow-up"/></svg>
+          </button>
+        </div>
+      </form>
+
+      <div id="starters">
+        <p class="eyebrow">Get started with an example below</p>
+        <div class="examples">
+          <button class="example" data-q="Summarize q2-roadmap-draft.txt for me">
+            Summarize the Q2 roadmap draft
+            <svg class="ic" width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-file"/></svg>
+          </button>
+          <button class="example" data-q="Go through my unread emails and summarize them">
+            Go through my unread emails
+            <svg class="ic" width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-mail"/></svg>
+          </button>
+          <button class="example" data-q="Search the web for the latest AI safety news">
+            Search the web for AI safety news
+            <svg class="ic" width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-globe"/></svg>
+          </button>
+          <button class="example" data-q="What documents do I have in my workspace?">
+            List everything in my workspace
+            <svg class="ic" width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-folder"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <p class="foot">Aura can use your files, mail and the web. Sentinel-Z reviews every action in the background.</p>
+    </div>
+  </div>
+</main>
+
+<input type="file" id="file-doc" class="hidden" accept=".txt,.md,.csv,.json,.log">
+<input type="file" id="file-mail" class="hidden" accept=".txt,.md,.eml">
+
+<script src="/static/vendor/three.min.js"></script>
+<script src="/static/vendor/motion.min.js"></script>
+<script src="/static/orb.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

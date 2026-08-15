@@ -1,0 +1,39 @@
+VENDOR SERVICE AGREEMENT — SUMMARY SHEET
+Blue Sparrow Technologies  /  Northwind Cloud Services
+Reference: VSA-2026-0417
+
+1. PARTIES
+   Blue Sparrow Technologies ("Client") and Northwind Cloud Services
+   ("Provider") enter this agreement effective 1 April 2026.
+
+2. SERVICES
+   Provider will host the Client's analytics workloads on dedicated compute,
+   with 99.9% monthly uptime and 24x7 support for severity-1 incidents.
+
+3. TERM
+   Initial term of twelve (12) months, auto-renewing for successive twelve
+   month terms unless either party gives sixty (60) days' notice.
+
+4. FEES
+   USD 4,200 per month, invoiced monthly in arrears. Late payments accrue
+   interest at 1.0% per month.
+
+5. DATA
+   Provider processes Client data solely to deliver the services. Data is
+   encrypted at rest and in transit. Provider will not access Client data
+   except as required for support, and only with a logged, time-boxed grant.
+
+6. TERMINATION
+   Either party may terminate for material breach not cured within thirty
+   (30) days of written notice. On termination Provider returns or deletes
+   all Client data within fifteen (15) days.
+
+7. LIABILITY
+   Each party's aggregate liability is capped at the fees paid in the twelve
+   months preceding the claim. Neither party is liable for indirect or
+   consequential damages.
+
+8. OPEN ITEMS
+   - Security addendum still under legal review.
+   - Data-residency region to be confirmed (EU vs US).
+   - Named support contacts to be exchanged after signature.

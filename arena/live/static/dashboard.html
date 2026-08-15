@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sentinel-Z — Live Defense</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<svg class="hidden" aria-hidden="true">
+  <defs>
+    <g id="i-home"><path d="M3 9.5 10 4l7 5.5V16a1 1 0 0 1-1 1h-3v-5H7v5H4a1 1 0 0 1-1-1z"/></g>
+    <g id="i-shield"><path d="M10 3l6 2.3v4.4c0 3.4-2.4 6.4-6 7.3-3.6-.9-6-3.9-6-7.3V5.3z"/><path d="M7.6 10.2 9.3 12l3.3-3.4"/></g>
+  </defs>
+</svg>
+
+<nav class="rail" aria-label="Primary">
+  <div class="nav">
+    <a class="rail-btn" href="/" aria-label="Assistant"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-home"/></svg></a>
+    <a class="rail-btn" href="/dashboard" aria-current="page" aria-label="Sentinel-Z dashboard"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-shield"/></svg></a>
+  </div>
+</nav>
+
+<main>
+  <header class="topbar">
+    <span class="name">Sentinel-Z</span>
+    <span class="sub">hybrid learned-observation POMDP · one decision per tool call</span>
+    <div class="right">
+      <span class="pill" id="pill-backend">connecting</span>
+      <span class="pill" id="pill-policy">policy —</span>
+    </div>
+  </header>
+
+  <div class="scroll">
+    <div class="board">
+
+      <section class="panel full">
+        <div class="kpis">
+          <div class="kpi"><div class="k">calls reviewed</div><div class="v" id="k-calls">0</div></div>
+          <div class="kpi"><div class="k">allowed</div><div class="v" id="k-allowed">0</div></div>
+          <div class="kpi"><div class="k">intervened</div><div class="v" id="k-acted">0</div></div>
+          <div class="kpi"><div class="k">records leaked</div><div class="v" id="k-leaked">0</div></div>
+          <div class="kpi"><div class="k">session state</div><div class="v"><span class="tag BENIGN" id="k-state">BENIGN</span></div></div>
+        </div>
+      </section>
+
+      <section class="panel third">
+        <h2>Signals</h2>
+        <div id="signals"><p class="empty">No call has been reviewed yet.</p></div>
+      </section>
+
+      <section class="panel third">
+        <h2>Latest decision</h2>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+          <span class="tag" id="d-action">—</span>
+        </div>
+        <p class="empty" id="d-why" style="margin:0 0 16px">Waiting for a tool call.</p>
+        <h2>Hazard <span id="d-hazard" style="font-variant-numeric:tabular-nums">0.000</span></h2>
+        <svg class="spark" id="spark" viewBox="0 0 300 54" preserveAspectRatio="none" aria-hidden="true"></svg>
+      </section>
+
+      <section class="panel third">
+        <h2>Expected cost per action <span style="text-transform:none;font-weight:400">— lowest wins</span></h2>
+        <div id="costs"><p class="empty">No policy evaluation yet.</p></div>
+        <h2 style="margin-top:16px">P(harm within n steps)</h2>
+        <div id="absorption"><p class="empty">—</p></div>
+      </section>
+
+      <section class="panel">
+        <h2>What left the boundary</h2>
+        <div class="wire" id="wire"><span class="none">nothing has left the boundary</span></div>
+      </section>
+
+      <section class="panel">
+        <h2>Decision log</h2>
+        <div style="max-height:198px;overflow-y:auto">
+          <table class="log">
+            <thead><tr><th>#</th><th>tool</th><th>action</th><th>state</th><th>hazard</th></tr></thead>
+            <tbody id="log"></tbody>
+          </table>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</main>
+
+<script src="/static/vendor/motion.min.js"></script>
+<script src="/static/dashboard.js"></script>
+</body>
+</html>
