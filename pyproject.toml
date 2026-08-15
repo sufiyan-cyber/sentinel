@@ -1,0 +1,84 @@
+[project]
+name = "sentinel-z-arena"
+version = "0.1.0"
+description = "Sentinel-Z Arena — session-level prediction and capability revocation for tool-using LLM agents"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+    "pydantic>=2.7",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+# Laptop A (victim): runs the agent, the signals, the models and the UI.
+victim = [
+    "agentdojo>=0.1.35",
+    "scikit-learn>=1.4",
+    "pandas>=2.2",
+    "joblib>=1.4",
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "httpx>=0.27",
+    "ollama>=0.3",
+    "rich>=13.7",
+]
+# Laptop B (attacker): exfiltration server + injection composer only. No ML.
+attacker = [
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "rich>=13.7",
+    "httpx>=0.27",
+]
+# Optional: the real neural injection classifier and sentence embedder.
+# Without these, sentinelz falls back to deterministic lexical scorers
+# (see sentinelz/signals/injection.py and alignment.py).
+neural = [
+    "torch>=2.2",
+    "transformers>=4.40",
+]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.4",
+    "mypy>=1.10",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["arena*", "sentinelz*"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+exclude = [".venv", "runs", "models", "docs"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+# E741: the POMDP's transition and observation matrices are T and O in the
+#   spec, in every report and in the paper. Renaming them to satisfy a linter
+#   would make the code and the write-up disagree.
+# B006: AgentDojo's BasePipelineElement.query signature uses mutable defaults;
+#   our overrides must match it.
+ignore = ["E501", "B008", "B006", "SIM108", "E741"]
+
+[tool.mypy]
+# No python_version pin: it must match the interpreter actually running, or
+# numpy's stubs fail to parse. Ruff's target-version covers the syntax floor.
+files = ["sentinelz", "arena"]
+ignore_missing_imports = true
+disallow_untyped_defs = false
+check_untyped_defs = true
+warn_unused_ignores = false
+warn_redundant_casts = true
+exclude = "(^|/)(\\.venv|runs|models)/"
+
+[[tool.mypy.overrides]]
+module = ["agentdojo.*", "sklearn.*", "joblib.*", "transformers.*", "torch.*", "ollama.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+filterwarnings = ["ignore::DeprecationWarning"]

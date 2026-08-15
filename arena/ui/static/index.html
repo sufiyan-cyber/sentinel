@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sentinel-Z Arena</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<header id="scoreboard">
+  <div class="brand">
+    <div class="mark">SENTINEL&#8209;Z</div>
+    <div class="sub" id="backend-line">connecting&hellip;</div>
+  </div>
+  <div class="scores">
+    <div class="score"><div class="num" id="s-attempted">0</div><div class="lbl">attacks attempted</div></div>
+    <div class="score bad"><div class="num" id="s-succeeded">0</div><div class="lbl">succeeded</div></div>
+    <div class="score good"><div class="num" id="s-blocked">0</div><div class="lbl">blocked</div></div>
+    <div class="score bad"><div class="num" id="s-leaked">0</div><div class="lbl">records leaked, undefended</div></div>
+    <div class="score"><div class="num" id="s-utility">100%</div><div class="lbl">benign utility retained</div></div>
+    <div class="score round" id="round-box" hidden><div class="num" id="s-round">0</div><div class="lbl">round</div></div>
+  </div>
+</header>
+
+<nav id="controls">
+  <button id="btn-benign">Run benign</button>
+  <button id="btn-attack">Run attack</button>
+  <button id="btn-campaign">Start campaign</button>
+  <button id="btn-replay">Replay demo</button>
+  <button id="btn-reset" class="ghost">Reset</button>
+
+  <span class="sep"></span>
+  <label>Speed
+    <select id="speed">
+      <option value="1">1&times;</option>
+      <option value="4">4&times;</option>
+      <option value="8" selected>8&times;</option>
+      <option value="16">16&times;</option>
+    </select>
+  </label>
+  <label class="toggle">
+    <input type="checkbox" id="defense" checked> Defense on
+  </label>
+  <label>Threshold <span id="thr-val">0.50</span>
+    <input type="range" id="threshold" min="0" max="1" step="0.01" value="0.5">
+  </label>
+  <span class="sep"></span>
+  <span id="log" class="log"></span>
+</nav>
+
+<main id="arena">
+  <!-- ------------------------------------------------ left: undefended -->
+  <section class="column undefended">
+    <h2>UNDEFENDED <span class="tag" id="left-tag"></span></h2>
+    <div class="transcript" id="left-transcript"></div>
+    <div class="exfil">
+      <div class="exfil-head">ATTACKER&rsquo;S SERVER <span class="count" id="left-exfil-count">0 records</span></div>
+      <pre class="exfil-body" id="left-exfil"><span class="cursor">&#9608;</span></pre>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------ right: defended -->
+  <section class="column defended">
+    <h2>SENTINEL&#8209;Z <span class="tag" id="right-tag"></span></h2>
+
+    <div class="panel signals">
+      <div class="panel-title">signals</div>
+      <div id="signal-bars"></div>
+    </div>
+
+    <div class="panel decision-panel">
+      <div class="decision-row">
+        <div>
+          <div class="panel-title">state</div>
+          <div class="chip" id="state-chip">BENIGN</div>
+        </div>
+        <div>
+          <div class="panel-title">decision</div>
+          <div class="chip action" id="action-chip">&mdash;</div>
+        </div>
+        <div class="grow">
+          <div class="panel-title">hazard <span id="hazard-val" class="mono">0.000</span></div>
+          <svg id="hazard-spark" viewBox="0 0 300 46" preserveAspectRatio="none"></svg>
+        </div>
+      </div>
+      <div class="panel-title">expected cost of each action <span class="hint">(lowest wins)</span></div>
+      <div id="cost-bars"></div>
+      <div class="panel-title">P(harm within n steps)</div>
+      <div class="absorb mono" id="absorption">n1 &mdash; &nbsp; n3 &mdash; &nbsp; n5 &mdash;</div>
+    </div>
+
+    <div class="transcript" id="right-transcript"></div>
+    <div class="exfil">
+      <div class="exfil-head">ATTACKER&rsquo;S SERVER <span class="count" id="right-exfil-count">0 records</span></div>
+      <pre class="exfil-body" id="right-exfil"><span class="cursor">&#9608;</span></pre>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------- drawer: adaptation -->
+  <aside id="drawer" class="hidden">
+    <h2>ADAPTATION <button id="drawer-close" class="ghost small">close</button></h2>
+    <svg id="asr-chart" viewBox="0 0 320 120"></svg>
+    <div class="asr-caption">ASR vs adaptation round</div>
+    <div id="rounds"></div>
+  </aside>
+</main>
+
+<footer id="timeline">
+  <div class="tl-head">
+    <span>FLIGHT RECORDER</span>
+    <span class="mono" id="tl-label">no run loaded</span>
+  </div>
+  <input type="range" id="scrub" min="0" max="0" value="0" step="1" disabled>
+  <div id="tl-detail" class="tl-detail">
+    <span class="muted">drag to inspect any step of the last defended run</span>
+  </div>
+</footer>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

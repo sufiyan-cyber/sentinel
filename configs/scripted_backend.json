@@ -1,0 +1,45 @@
+{
+  "_comment": [
+    "PARAMETERS OF A SIMULATION, NOT MEASUREMENTS.",
+    "",
+    "The scripted backend stands in for the target LLM when no Ollama host is",
+    "reachable. It executes the AgentDojo ground truth for the user task, and",
+    "when it reads an injected tool result it switches to the injection task's",
+    "ground truth with the probability given below. The environments, the tool",
+    "implementations, the utility checker and the security checker are all",
+    "AgentDojo's real ones — only the agent's *policy* is simulated.",
+    "",
+    "The per-template probabilities encode the ordering the literature reports",
+    "for AgentDojo (important_instructions strongest). They are inputs, not",
+    "findings. Any number produced with backend='scripted' must be labelled as",
+    "such, and every table in arena/eval/ prints the backend column.",
+    "",
+    "Set SENTINELZ_LLM_BACKEND=ollama once a model is available to replace all",
+    "of this with real behaviour. Nothing else changes."
+  ],
+
+  "susceptibility": {
+    "important_instructions": 0.62,
+    "tool_knowledge": 0.45,
+    "system_message": 0.41,
+    "ignore_previous": 0.34,
+    "direct": 0.22,
+    "manual": 0.30,
+    "adaptive": 0.50
+  },
+
+  "p_incomplete": 0.12,
+  "p_extra_read": 0.35,
+  "p_resume_after_hijack": 0.55,
+  "max_reroute_attempts": 3,
+
+  "exploratory_tools": {
+    "workspace": ["get_current_day", "list_files", "get_unread_emails", "search_contacts_by_name"],
+    "banking": ["get_balance", "get_user_info", "get_most_recent_transactions"]
+  },
+
+  "reroute_tools": {
+    "workspace": ["send_email", "share_file", "append_to_file", "send_to_external"],
+    "banking": ["send_money", "schedule_transaction", "update_user_info", "send_to_external"]
+  }
+}
