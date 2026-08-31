@@ -1,9 +1,5 @@
-// The orb.
-//
-// Same construction as the three.js block in the supplied design file — a
-// high-segment sphere in MeshPhongMaterial, purple emissive under a warm key
-// light — rebuilt against the vendored copy of three so it runs offline, and
-// tuned for a 56px render where the specular highlight is what sells it.
+// Aura Orb — Smooth, glowing purple/magenta 3D animated sphere.
+// Clean gradient shading with NO harsh specular dots, continuous floating rotation & neon aura.
 
 (function () {
   const canvas = document.getElementById("orb");
@@ -11,62 +7,68 @@
 
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  // No WebGL (or three failed to load): fall back to a CSS sphere rather
-  // than leaving a blank square where the brand mark should be.
-  if (typeof THREE === "undefined") return fallback();
+  if (typeof THREE === "undefined") {
+    return setupFallback();
+  }
 
   let renderer;
   try {
     renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
   } catch (_) {
-    return fallback();
+    return setupFallback();
   }
 
-  const SIZE = 56;
+  const SIZE = 68;
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.setSize(SIZE, SIZE, false);
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
+  const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
   camera.position.z = 2.9;
 
-  const sphere = new THREE.Mesh(
-    new THREE.SphereGeometry(1, 64, 64),
-    new THREE.MeshPhongMaterial({
-      color: 0xd946ef,
-      emissive: 0x7e22ce,
-      emissiveIntensity: 0.45,
-      shininess: 120,
-      specular: 0xffffff,
-    })
-  );
+  // Smooth, rich magenta/violet sphere with soft diffuse sheen (no white specular dots)
+  const geometry = new THREE.SphereGeometry(1, 64, 64);
+  const material = new THREE.MeshPhongMaterial({
+    color: 0xd946ef,
+    emissive: 0x8b5cf6,
+    emissiveIntensity: 0.6,
+    shininess: 30,
+    specular: 0xd946ef, // Tinted specular prevents harsh white dots
+  });
+
+  const sphere = new THREE.Mesh(geometry, material);
   scene.add(sphere);
 
-  scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+  // Soft balanced ambient & directional lighting for a smooth, uniform gradient
+  const ambient = new THREE.AmbientLight(0xffffff, 0.85);
+  scene.add(ambient);
 
-  // Key light high and to the left, which is where the highlight sits in the
-  // reference. A second, dimmer rim light keeps the lower right from going flat.
-  const key = new THREE.PointLight(0xffffff, 1.15);
-  key.position.set(-2.2, 2.6, 3.2);
-  scene.add(key);
+  const softKey = new THREE.DirectionalLight(0xffffff, 0.6);
+  softKey.position.set(-1.5, 2.0, 2.5);
+  scene.add(softKey);
 
-  const rim = new THREE.PointLight(0xc084fc, 0.6);
-  rim.position.set(2.6, -1.8, 1.4);
-  scene.add(rim);
+  const softFill = new THREE.DirectionalLight(0xc084fc, 0.4);
+  softFill.position.set(1.5, -1.5, 1.5);
+  scene.add(softFill);
 
-  let speed = 1;
-  let target = 1;
+  let speed = 1.0;
+  let targetSpeed = 1.0;
   let t = 0;
 
-  function frame() {
-    requestAnimationFrame(frame);
-    speed += (target - speed) * 0.06;
-    t += 0.016 * speed;
+  function animate() {
+    requestAnimationFrame(animate);
 
-    sphere.rotation.y += 0.006 * speed;
-    sphere.rotation.z += 0.0018 * speed;
-    const breathe = 1 + Math.sin(t * 1.5) * 0.035;
-    sphere.scale.setScalar(breathe);
+    speed += (targetSpeed - speed) * 0.08;
+    t += 0.02 * speed;
+
+    // Smooth floating rotation
+    sphere.rotation.y += 0.008 * speed;
+    sphere.rotation.x = Math.sin(t * 0.6) * 0.15;
+    sphere.rotation.z = Math.cos(t * 0.4) * 0.1;
+
+    // Gentle breathing pulse
+    const scale = 1.0 + Math.sin(t * 1.5) * 0.03;
+    sphere.scale.setScalar(scale);
 
     renderer.render(scene, camera);
   }
@@ -74,22 +76,26 @@
   if (reduced) {
     renderer.render(scene, camera);
   } else {
-    frame();
+    animate();
   }
 
-  // `busy` is set by app.js while a turn is in flight. The orb spinning
-  // faster is the only "thinking" indicator on the page, so it has to read
-  // clearly without becoming a distraction.
   window.auraOrb = {
-    busy(on) {
-      target = on ? 3.4 : 1;
+    busy(isBusy) {
+      targetSpeed = isBusy ? 3.5 : 1.0;
+      material.emissiveIntensity = isBusy ? 0.9 : 0.6;
     },
   };
 
-  function fallback() {
+  function setupFallback() {
     const div = document.createElement("div");
     div.className = "orb-fallback";
     canvas.replaceWith(div);
-    window.auraOrb = { busy() {} };
+    window.auraOrb = {
+      busy(isBusy) {
+        if (div) {
+          div.style.animationDuration = isBusy ? "1.5s" : "5s";
+        }
+      },
+    };
   }
 })();

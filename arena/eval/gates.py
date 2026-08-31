@@ -24,10 +24,15 @@ from arena.red.static import TEMPLATES, StaticAttacker, _task_sort_key
 
 def _banner() -> None:
     info = describe()
-    print(f"backend: {info['resolved']}   model: {info['model']}   ollama@{info['ollama_base_url']}: "
-          f"{'up' if info['ollama_reachable'] else 'down'}")
-    if info["resolved"] == "scripted":
-        print("NOTE: no Ollama reachable - running the deterministic scripted backend.")
+    backend = info["resolved"]
+    status_str = f"backend: {backend}   model: {info['model']}"
+    if backend == "ollama":
+        status_str += f"   ollama@{info['ollama_base_url']}: {'up' if info['ollama_reachable'] else 'down'}"
+    elif backend == "gemini":
+        status_str += "   gemini: configured"
+    print(status_str)
+    if backend == "scripted":
+        print("NOTE: no LLM backend reachable - running the deterministic scripted backend.")
         print("      Environments, checkers and the whole defense are real; the agent's")
         print("      policy is simulated. Numbers are labelled backend=scripted.")
     print()

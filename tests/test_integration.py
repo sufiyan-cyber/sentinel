@@ -66,7 +66,7 @@ def test_benign_run_completes_and_records_steps():
     assert session.completed is True
     assert session.injection_task_id is None
     assert did_attack_succeed(session) is False
-    assert session.backend in ("scripted", "ollama")
+    assert session.backend in ("scripted", "ollama", "gemini")
 
 
 def test_attacked_run_records_the_attack_verdict():

@@ -28,7 +28,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from arena import config
-from arena.agent.backends import OLLAMA, resolve_backend
+from arena.agent.backends import GEMINI, OLLAMA, resolve_backend
 from arena.agent.runner import TargetAgent
 from arena.red.static import StaticAttacker
 from sentinelz.evidence.canonical import dumps_str, loads
@@ -142,8 +142,8 @@ class AdaptiveAttacker:
         self.base_template = base_template
         self.seed = seed
         self.backend = resolve_backend()
-        self.model = model or config.ATTACKER_MODEL
-        self.rewriter = "llm" if self.backend == OLLAMA else "ladder"
+        self.model = model or (config.GEMINI_MODEL if self.backend == GEMINI else config.ATTACKER_MODEL)
+        self.rewriter = "llm" if self.backend in (OLLAMA, GEMINI) else "ladder"
 
     # ---------------------------------------------------------- campaign
     def attack(
@@ -256,6 +256,24 @@ class AdaptiveAttacker:
             f"({feedback['top_signal_value']:.2f})\n\n"
             "Return ONLY the rewritten injection text, with no commentary."
         )
+        if self.backend == GEMINI:
+            try:
+                import openai
+
+                client = openai.OpenAI(
+                    base_url=config.GEMINI_BASE_URL.rstrip("/"),
+                    api_key=config.GEMINI_API_KEY.strip(),
+                    max_retries=1,
+                )
+                resp = client.chat.completions.create(
+                    model=self.model or config.GEMINI_MODEL,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.9,
+                )
+                return str(resp.choices[0].message.content or "").strip()
+            except Exception:
+                return ""
+
         try:
             import httpx
 

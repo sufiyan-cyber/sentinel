@@ -1,15 +1,14 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Aura — AI Workspace</title>
+<title>Aura — AI Workspace Assistant</title>
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 
-<!-- One icon set, 1.5px stroke, 20px grid. Lucide geometry, inlined so the
-     page needs no icon font and no network. -->
+<!-- Icons definition -->
 <svg class="hidden" aria-hidden="true">
   <defs>
     <g id="i-home"><path d="M3 9.5 10 4l7 5.5V16a1 1 0 0 1-1 1h-3v-5H7v5H4a1 1 0 0 1-1-1z"/></g>
@@ -17,18 +16,15 @@
     <g id="i-history"><path d="M3 10a7 7 0 1 0 2-4.9M3 4v3h3"/><path d="M10 6.5V10l2.5 1.5"/></g>
     <g id="i-bot"><rect x="4" y="7.5" width="12" height="9" rx="2"/><path d="M10 4.5v3M7.5 11.5v1M12.5 11.5v1"/><circle cx="10" cy="3.5" r="1"/></g>
     <g id="i-folder"><path d="M3 6a1 1 0 0 1 1-1h3.2l1.4 1.8H16a1 1 0 0 1 1 1V15a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/></g>
-    <g id="i-share"><circle cx="15" cy="5" r="2"/><circle cx="5" cy="10" r="2"/><circle cx="15" cy="15" r="2"/><path d="M6.8 9 13.2 6M6.8 11l6.4 3"/></g>
-    <g id="i-db"><ellipse cx="10" cy="5.5" rx="6" ry="2.2"/><path d="M4 5.5v9c0 1.2 2.7 2.2 6 2.2s6-1 6-2.2v-9M4 10c0 1.2 2.7 2.2 6 2.2s6-1 6-2.2"/></g>
     <g id="i-shield"><path d="M10 3l6 2.3v4.4c0 3.4-2.4 6.4-6 7.3-3.6-.9-6-3.9-6-7.3V5.3z"/><path d="M7.6 10.2 9.3 12l3.3-3.4"/></g>
-    <g id="i-help"><path d="M4 12v-2a6 6 0 0 1 12 0v2"/><path d="M4 11.5h1.6a1 1 0 0 1 1 1v2.2a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1zM16 11.5h-1.6a1 1 0 0 0-1 1v2.2a1 1 0 0 0 1 1H15a1 1 0 0 0 1-1z"/></g>
     <g id="i-settings"><circle cx="10" cy="10" r="2.4"/><path d="M10 2.6v2M10 15.4v2M17.4 10h-2M4.6 10h-2M15.2 4.8l-1.4 1.4M6.2 13.8l-1.4 1.4M15.2 15.2l-1.4-1.4M6.2 6.2 4.8 4.8"/></g>
     <g id="i-refresh"><path d="M16.5 8.5a6.5 6.5 0 1 0 .3 3.5"/><path d="M16.9 4.5v4h-4"/></g>
-
+    <g id="i-sun"><circle cx="10" cy="10" r="4"/><path d="M10 2v2M10 16v2M18 10h-2M4 10H2M15.66 4.34l-1.42 1.42M5.76 14.24l-1.42 1.42M15.66 15.66l-1.42-1.42M5.76 5.76L4.34 4.34"/></g>
+    <g id="i-moon"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></g>
     <g id="i-spark"><path d="M10 3.2l1.5 3.9 3.9 1.5-3.9 1.5L10 14l-1.5-3.9L4.6 8.6l3.9-1.5z"/><path d="M15.4 13.2l.7 1.7 1.7.7-1.7.7-.7 1.7-.7-1.7-1.7-.7 1.7-.7z"/></g>
     <g id="i-clip"><path d="M15.5 9.3l-5.6 5.6a3.4 3.4 0 0 1-4.8-4.8l5.9-5.9a2.3 2.3 0 0 1 3.2 3.2l-5.8 5.9a1.1 1.1 0 0 1-1.6-1.6l5.2-5.2"/></g>
     <g id="i-chevron"><path d="M6.5 8.5 10 12l3.5-3.5"/></g>
     <g id="i-arrow-up"><path d="M10 15.5v-11M5.5 9 10 4.5 14.5 9"/></g>
-
     <g id="i-file"><path d="M11 3H6a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V7z"/><path d="M11 3v4h4M7.5 11h5M7.5 13.5h5"/></g>
     <g id="i-mail"><rect x="3" y="5" width="14" height="10" rx="1.5"/><path d="m3.6 6 6.4 4.6L16.4 6"/></g>
     <g id="i-globe"><circle cx="10" cy="10" r="7"/><path d="M3.2 10h13.6M10 3.1a11 11 0 0 1 0 13.8 11 11 0 0 1 0-13.8"/></g>
@@ -37,31 +33,50 @@
     <g id="i-check"><path d="m5 10.5 3.3 3.2L15 6.8"/></g>
     <g id="i-x"><path d="m6 6 8 8M14 6l-8 8"/></g>
     <g id="i-loader"><path d="M10 3.2v3M10 13.8v3M16.8 10h-3M6.2 10h-3M14.8 5.2l-2.1 2.1M7.3 12.7l-2.1 2.1M14.8 14.8l-2.1-2.1M7.3 7.3 5.2 5.2"/></g>
+    <g id="i-flask"><path d="M8 3h4M10 3v5l-4 7a2 2 0 0 0 1.7 3h8.6a2 2 0 0 0 1.7-3l-4-7V3"/><path d="M7.5 14h9"/></g>
   </defs>
 </svg>
 
-<nav class="rail" aria-label="Primary">
+<!-- Primary Left Rail -->
+<nav class="rail" aria-label="Primary Navigation">
   <div class="nav">
-    <a class="rail-btn" href="/" aria-current="page" aria-label="Assistant"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-home"/></svg></a>
-    <button class="rail-btn" type="button" aria-label="Conversations" disabled><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-chat"/></svg></button>
-    <button class="rail-btn" type="button" aria-label="History" disabled><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-history"/></svg></button>
-    <button class="rail-btn" type="button" aria-label="Agents" disabled><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-bot"/></svg></button>
-    <button class="rail-btn" type="button" aria-label="Files" disabled><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-folder"/></svg></button>
-    <a class="rail-btn" href="/dashboard" target="_blank" aria-label="Sentinel-Z dashboard"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-shield"/></svg></a>
+    <button class="rail-btn active" id="btn-nav-home" type="button" data-tip="Assistant Chat" aria-label="Assistant Chat">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-home"/></svg>
+    </button>
+    <button class="rail-btn" id="btn-nav-history" type="button" data-tip="Session History" aria-label="Session History">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-history"/></svg>
+    </button>
+    <button class="rail-btn" id="btn-nav-models" type="button" data-tip="AI Models & Backend" aria-label="AI Models">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-bot"/></svg>
+    </button>
+    <button class="rail-btn" id="btn-nav-files" type="button" data-tip="Workspace & Fixtures" aria-label="Workspace Files">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-folder"/></svg>
+    </button>
+    <a class="rail-btn" id="btn-nav-shield" href="/dashboard" target="_blank" data-tip="Sentinel-Z Dashboard" aria-label="Sentinel-Z Dashboard">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-shield"/></svg>
+    </a>
   </div>
   <div class="grow"></div>
   <div class="nav">
-    <button class="rail-btn" id="btn-reset" type="button" aria-label="Start a new session"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-refresh"/></svg></button>
-    <button class="rail-btn" type="button" aria-label="Settings" disabled><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-settings"/></svg></button>
+    <button class="rail-btn" id="btn-theme" type="button" data-tip="Toggle Theme (Dark/Light)" aria-label="Toggle Theme">
+      <svg class="theme-icon-dark" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-sun"/></svg>
+    </button>
+    <button class="rail-btn" id="btn-reset" type="button" data-tip="Reset Session" aria-label="Start a new session">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-refresh"/></svg>
+    </button>
+    <button class="rail-btn" id="btn-nav-settings" type="button" data-tip="Settings" aria-label="Settings">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-settings"/></svg>
+    </button>
   </div>
 </nav>
 
+<!-- Main Chat View -->
 <main>
   <header class="topbar">
     <span class="name">Aura</span>
     <span class="sub">personal workspace assistant</span>
     <div class="right">
-      <span class="pill" id="pill-backend">connecting</span>
+      <button class="pill" id="pill-backend" style="cursor:pointer;" title="Click to change AI model">connecting</button>
       <a class="pill ok" id="pill-defense" href="/dashboard" target="_blank"><span class="led"></span>Sentinel-Z active</a>
     </div>
   </header>
@@ -69,7 +84,9 @@
   <div class="scroll" id="scroll">
     <div class="col">
       <section class="hero" id="hero">
-        <div class="orb-wrap"><canvas id="orb" width="112" height="112" aria-hidden="true"></canvas></div>
+        <div class="orb-wrap">
+          <canvas id="orb" width="144" height="144" aria-hidden="true"></canvas>
+        </div>
         <h1 class="greet"><span id="greeting">Good day.</span><br><span class="accent">What's on your mind?</span></h1>
       </section>
       <div class="thread" id="thread"></div>
@@ -80,28 +97,28 @@
     <div class="col">
       <form class="composer" id="composer">
         <div class="field">
-          <svg class="spark" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-spark"/></svg>
+          <svg class="spark-icon" width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-spark"/></svg>
           <label class="sr" for="input">Message Aura</label>
-          <textarea id="input" rows="2" placeholder="Ask Aura a question or make a request…"></textarea>
+          <textarea id="input" rows="2" placeholder="Ask Aura a question or request a workspace task…"></textarea>
         </div>
         <div class="tools">
-          <button class="tool" type="button" id="btn-doc">
+          <button class="tool" type="button" id="btn-doc" title="Attach document to workspace">
             <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-clip"/></svg>
-            Attach
+            Attach File
           </button>
-          <button class="tool" type="button" id="btn-mail">
-            <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-mail"/></svg>
-            Add email
-            <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-chevron"/></svg>
+          <button class="tool" type="button" id="btn-samples" title="Load Demo Attack Fixtures or Emails">
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-flask"/></svg>
+            Demo Fixtures
+            <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-chevron"/></svg>
           </button>
           <span class="grow"></span>
-          <label class="switch">
+          <label class="switch" title="Toggle Sentinel-Z Decision Gateway">
             <input type="checkbox" id="tgl-defense" checked>
             <span class="track"></span>
-            Sentinel-Z
+            Sentinel-Z Defense
           </label>
-          <button class="send" id="btn-send" type="submit" aria-label="Send message">
-            <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-arrow-up"/></svg>
+          <button class="send" id="btn-send" type="submit" aria-label="Send message" title="Send message (Enter)">
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-arrow-up"/></svg>
           </button>
         </div>
       </form>
@@ -110,32 +127,146 @@
         <p class="eyebrow">Get started with an example below</p>
         <div class="examples">
           <button class="example" data-q="Summarize q2-roadmap-draft.txt for me">
-            Summarize the Q2 roadmap draft
-            <svg class="ic" width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-file"/></svg>
+            <span>Summarize the Q2 roadmap draft</span>
+            <svg class="ic" width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-file"/></svg>
           </button>
           <button class="example" data-q="Go through my unread emails and summarize them">
-            Go through my unread emails
-            <svg class="ic" width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-mail"/></svg>
+            <span>Go through my unread emails</span>
+            <svg class="ic" width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-mail"/></svg>
           </button>
           <button class="example" data-q="Search the web for the latest AI safety news">
-            Search the web for AI safety news
-            <svg class="ic" width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-globe"/></svg>
+            <span>Search the web for AI safety news</span>
+            <svg class="ic" width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-globe"/></svg>
           </button>
           <button class="example" data-q="What documents do I have in my workspace?">
-            List everything in my workspace
-            <svg class="ic" width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-folder"/></svg>
+            <span>List everything in my workspace</span>
+            <svg class="ic" width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-folder"/></svg>
           </button>
         </div>
       </div>
 
-      <p class="foot">Aura can use your files, mail and the web. Sentinel-Z reviews every action in the background.</p>
+      <p class="foot">Aura can access your workspace files, mailbox and the web. Sentinel-Z reviews every tool call with a <100ms POMDP gateway.</p>
     </div>
   </div>
 </main>
 
-<input type="file" id="file-doc" class="hidden" accept=".txt,.md,.csv,.json,.log">
+<!-- Drawers & Modals -->
+<div class="drawer-backdrop" id="backdrop"></div>
+
+<!-- Workspace Files Drawer -->
+<div class="drawer" id="drawer-files">
+  <div class="drawer-header">
+    <h3>Workspace & Fixtures</h3>
+    <button class="drawer-close" type="button" aria-label="Close drawer"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-x"/></svg></button>
+  </div>
+  <div class="drawer-body">
+    <div style="display:flex;gap:8px;">
+      <button class="btn primary" id="btn-upload-doc" style="flex:1;"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" style="display:inline;vertical-align:middle;margin-right:4px;"><use href="#i-upload"/></svg>Upload File</button>
+      <button class="btn" id="btn-upload-mail" style="flex:1;"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" style="display:inline;vertical-align:middle;margin-right:4px;"><use href="#i-mail"/></svg>Add Email</button>
+    </div>
+    <div>
+      <h4 style="margin:0 0 8px;font-size:12px;text-transform:uppercase;color:var(--muted);letter-spacing:0.06em;">Demo Attack Fixtures</h4>
+      <div id="sample-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+    </div>
+    <div>
+      <h4 style="margin:0 0 8px;font-size:12px;text-transform:uppercase;color:var(--muted);letter-spacing:0.06em;">Active Documents</h4>
+      <div id="doc-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+    </div>
+    <div>
+      <h4 style="margin:0 0 8px;font-size:12px;text-transform:uppercase;color:var(--muted);letter-spacing:0.06em;">Active Mailbox</h4>
+      <div id="email-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Session History Drawer -->
+<div class="drawer" id="drawer-history">
+  <div class="drawer-header">
+    <h3>Session History</h3>
+    <button class="drawer-close" type="button" aria-label="Close drawer"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-x"/></svg></button>
+  </div>
+  <div class="drawer-body">
+    <p style="font-size:13px;color:var(--ink-2);margin-top:0;">Timeline of user requests, assistant answers, and capability decisions in this session.</p>
+    <div id="history-list" style="display:flex;flex-direction:column;gap:10px;"></div>
+  </div>
+</div>
+
+<!-- Model Switcher Modal -->
+<div class="modal" id="modal-models">
+  <div class="modal-header">
+    <h3>AI Backend & Model</h3>
+    <button class="drawer-close" type="button" aria-label="Close modal"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-x"/></svg></button>
+  </div>
+  <div class="modal-body">
+    <p style="font-size:13px;color:var(--ink-2);margin:0;">Select which engine drives the target agent loop:</p>
+    <label class="opt-card" data-backend="nvidia">
+      <input type="radio" name="opt-backend" value="nvidia">
+      <div>
+        <div style="font-weight:600;font-size:14px;color:var(--ink);">NVIDIA NIM (Meta Llama 3.2 11B Cloud)</div>
+        <div style="font-size:12px;color:var(--ink-3);">High-speed cloud execution of <code>meta/llama-3.2-11b-vision-instruct</code>.</div>
+      </div>
+    </label>
+    <label class="opt-card" data-backend="gemini">
+      <input type="radio" name="opt-backend" value="gemini">
+      <div>
+        <div style="font-weight:600;font-size:14px;color:var(--ink);">Google Gemini API (Cloud)</div>
+        <div style="font-size:12px;color:var(--ink-3);">High performance, low memory footprint. Uses <code>gemini-3.6-flash</code>.</div>
+      </div>
+    </label>
+    <label class="opt-card" data-backend="ollama">
+      <input type="radio" name="opt-backend" value="ollama">
+      <div>
+        <div style="font-weight:600;font-size:14px;color:var(--ink);">Ollama (Local / LAN)</div>
+        <div style="font-size:12px;color:var(--ink-3);">Open-weights local execution via <code>OLLAMA_BASE_URL</code> (e.g. <code>llama3.1:8b</code>).</div>
+      </div>
+    </label>
+    <label class="opt-card" data-backend="scripted">
+      <input type="radio" name="opt-backend" value="scripted">
+      <div>
+        <div style="font-weight:600;font-size:14px;color:var(--ink);">Scripted Simulation (Deterministic)</div>
+        <div style="font-size:12px;color:var(--ink-3);">Zero model requirements. Simulates ground truth and attacks offline.</div>
+      </div>
+    </label>
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:8px;">
+      <button class="btn" id="btn-cancel-model" type="button">Cancel</button>
+      <button class="btn primary" id="btn-apply-model" type="button">Apply Backend</button>
+    </div>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div class="modal" id="modal-settings">
+  <div class="modal-header">
+    <h3>Sentinel-Z Live Settings</h3>
+    <button class="drawer-close" type="button" aria-label="Close modal"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-x"/></svg></button>
+  </div>
+  <div class="modal-body">
+    <div class="item-card">
+      <div class="name">Decision Budget</div>
+      <div class="meta">100ms hard latency cap for all 5 signals + POMDP state filter</div>
+    </div>
+    <div class="item-card">
+      <div class="name">Capability Broker</div>
+      <div class="meta">Enforces token destruction (REVOKE) at the runtime layer</div>
+    </div>
+    <div class="item-card">
+      <div class="name">Attacker Exfiltration Sink</div>
+      <div class="meta" id="setting-sink">http://127.0.0.1:8899</div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;margin-top:8px;">
+      <button class="btn primary" id="btn-close-settings" type="button">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- Hidden File Inputs -->
+<input type="file" id="file-doc" class="hidden" accept=".txt,.md,.csv,.json,.log,.pdf">
 <input type="file" id="file-mail" class="hidden" accept=".txt,.md,.eml">
 
+<!-- Scripts -->
 <script src="/static/vendor/three.min.js"></script>
 <script src="/static/vendor/motion.min.js"></script>
 <script src="/static/orb.js"></script>

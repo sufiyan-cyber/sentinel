@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sentinel-Z — Live Defense</title>
+<title>Sentinel-Z — Live Defense Dashboard</title>
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -12,13 +12,21 @@
   <defs>
     <g id="i-home"><path d="M3 9.5 10 4l7 5.5V16a1 1 0 0 1-1 1h-3v-5H7v5H4a1 1 0 0 1-1-1z"/></g>
     <g id="i-shield"><path d="M10 3l6 2.3v4.4c0 3.4-2.4 6.4-6 7.3-3.6-.9-6-3.9-6-7.3V5.3z"/><path d="M7.6 10.2 9.3 12l3.3-3.4"/></g>
+    <g id="i-sun"><circle cx="10" cy="10" r="4"/><path d="M10 2v2M10 16v2M18 10h-2M4 10H2M15.66 4.34l-1.42 1.42M5.76 14.24l-1.42 1.42M15.66 15.66l-1.42-1.42M5.76 5.76L4.34 4.34"/></g>
+    <g id="i-moon"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></g>
   </defs>
 </svg>
 
 <nav class="rail" aria-label="Primary">
   <div class="nav">
-    <a class="rail-btn" href="/" aria-label="Assistant"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-home"/></svg></a>
-    <a class="rail-btn" href="/dashboard" aria-current="page" aria-label="Sentinel-Z dashboard"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-shield"/></svg></a>
+    <a class="rail-btn" href="/" data-tip="Assistant Chat" aria-label="Assistant"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-home"/></svg></a>
+    <a class="rail-btn active" href="/dashboard" data-tip="Sentinel-Z Dashboard" aria-current="page" aria-label="Sentinel-Z dashboard"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-shield"/></svg></a>
+  </div>
+  <div class="grow"></div>
+  <div class="nav">
+    <button class="rail-btn" id="btn-theme" type="button" data-tip="Toggle Theme" aria-label="Toggle Theme">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-sun"/></svg>
+    </button>
   </div>
 </nav>
 
@@ -46,18 +54,18 @@
       </section>
 
       <section class="panel third">
-        <h2>Signals</h2>
+        <h2>Signals (5 Detectors)</h2>
         <div id="signals"><p class="empty">No call has been reviewed yet.</p></div>
       </section>
 
       <section class="panel third">
-        <h2>Latest decision</h2>
+        <h2>Latest Decision</h2>
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
           <span class="tag" id="d-action">—</span>
         </div>
         <p class="empty" id="d-why" style="margin:0 0 16px">Waiting for a tool call.</p>
-        <h2>Hazard <span id="d-hazard" style="font-variant-numeric:tabular-nums">0.000</span></h2>
-        <svg class="spark" id="spark" viewBox="0 0 300 54" preserveAspectRatio="none" aria-hidden="true"></svg>
+        <h2>Hazard Probability <span id="d-hazard" style="font-variant-numeric:tabular-nums">0.000</span></h2>
+        <svg class="sparkline" id="spark" viewBox="0 0 300 54" preserveAspectRatio="none" aria-hidden="true"></svg>
       </section>
 
       <section class="panel third">
@@ -68,13 +76,13 @@
       </section>
 
       <section class="panel">
-        <h2>What left the boundary</h2>
+        <h2>What left the boundary (Exfiltration Sink)</h2>
         <div class="wire" id="wire"><span class="none">nothing has left the boundary</span></div>
       </section>
 
       <section class="panel">
-        <h2>Decision log</h2>
-        <div style="max-height:198px;overflow-y:auto">
+        <h2>Decision log (SHA-256 Hash Chain)</h2>
+        <div style="max-height:220px;overflow-y:auto">
           <table class="log">
             <thead><tr><th>#</th><th>tool</th><th>action</th><th>state</th><th>hazard</th></tr></thead>
             <tbody id="log"></tbody>

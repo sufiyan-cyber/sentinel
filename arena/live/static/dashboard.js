@@ -1,5 +1,4 @@
-// Sentinel-Z live dashboard. Renders exactly what the gateway returned —
-// no smoothing, no re-derivation. Every number here came off the wire.
+// Sentinel-Z live dashboard. Renders exactly what the gateway returned.
 
 const $ = (id) => document.getElementById(id);
 const { animate } = window.Motion || {};
@@ -15,6 +14,29 @@ const hazards = [];
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const clamp01 = (v) => Math.max(0, Math.min(1, Number(v) || 0));
 
+function initTheme() {
+  const saved = localStorage.getItem("aura_theme") || "dark";
+  document.documentElement.setAttribute("data-theme", saved);
+  updateThemeIcon(saved);
+}
+
+function updateThemeIcon(theme) {
+  const btn = $("btn-theme");
+  if (!btn) return;
+  btn.innerHTML = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#${theme === 'dark' ? 'i-sun' : 'i-moon'}"/></svg>`;
+}
+
+const themeBtn = $("btn-theme");
+if (themeBtn) {
+  themeBtn.onclick = () => {
+    const current = document.documentElement.getAttribute("data-theme") || "dark";
+    const next = current === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    localStorage.setItem("aura_theme", next);
+    updateThemeIcon(next);
+  };
+}
+
 function meters(host, rows, digits = 2, opts = {}) {
   host.innerHTML = rows
     .map(([name, value, mod = ""]) =>
@@ -28,14 +50,14 @@ function meters(host, rows, digits = 2, opts = {}) {
 
 function drawSpark() {
   const svg = $("spark");
-  if (hazards.length < 2) { svg.innerHTML = ""; return; }
+  if (!svg || hazards.length < 2) { if (svg) svg.innerHTML = ""; return; }
   const n = hazards.length;
   const pts = hazards.map((v, i) => `${(i / (n - 1)) * 300},${52 - clamp01(v) * 48}`).join(" ");
   svg.innerHTML =
     `<defs><linearGradient id="hg" x1="0" x2="1">
        <stop offset="0" stop-color="#a855f7"/><stop offset="1" stop-color="#d946ef"/>
      </linearGradient></defs>
-     <polyline points="${pts}" fill="none" stroke="url(#hg)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+     <polyline points="${pts}" fill="none" stroke="url(#hg)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`;
 }
 
 function topSignals(signals, n = 3) {
@@ -59,10 +81,6 @@ function render(d) {
   const action = $("d-action");
   action.textContent = d.action;
   action.className = `tag ${d.action}`;
-  // The POMDP path leaves `reason` empty — `decide()` in sentinelz/policy/
-  // decide.py defaults it, and gateway.py doesn't pass one. Rather than print
-  // nothing on the row that matters most, fall back to the signals that
-  // actually drove it, labelled so nobody mistakes it for the gateway's words.
   $("d-why").textContent = d.reason || `driven by ${topSignals(d.signals)}`;
 
   const state = $("k-state");
@@ -106,8 +124,20 @@ const source = new EventSource("/events");
 
 function setBackend(d) {
   const b = $("pill-backend");
-  b.textContent = d.backend === "llm" ? d.model : "scripted backend";
-  b.className = d.backend === "llm" ? "pill ok" : "pill warn";
+  if (d.backend === "nvidia") {
+    b.textContent = `NVIDIA (Llama-3.2-11B)`;
+    b.className = "pill ok";
+  } else if (d.backend === "gemini") {
+    b.textContent = `Gemini (${d.model || "gemini-3.6-flash"})`;
+    b.className = "pill ok";
+  } else if (d.backend === "ollama") {
+    b.textContent = `Ollama (${d.model || "llama3.1:8b"})`;
+    b.className = "pill ok";
+  } else {
+    b.textContent = "Scripted (Offline)";
+    b.className = "pill warn";
+  }
+
   if (d.defense_on === false) {
     $("pill-policy").textContent = "defense off";
     $("pill-policy").className = "pill danger";
@@ -118,8 +148,6 @@ source.addEventListener("backend", (e) => setBackend(JSON.parse(e.data)));
 source.addEventListener("decision", (e) => render(JSON.parse(e.data)));
 source.addEventListener("reset", () => location.reload());
 
-// Opening the dashboard mid-session must not show an empty board: replay what
-// the gateway has already decided, then let the stream take over.
 fetch("/api/status")
   .then((r) => r.json())
   .then((d) => {
@@ -141,8 +169,10 @@ async function pollWire() {
       : '<span class="none">nothing has left the boundary</span>';
     $("wire").scrollTop = $("wire").scrollHeight;
   } catch (_) {
-    /* the collection server may not be running */
+    /* collection server may not be running */
   }
 }
 setInterval(pollWire, 1500);
 pollWire();
+
+initTheme();

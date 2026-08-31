@@ -240,6 +240,64 @@ def build_app() -> FastAPI:
         STATE.reset()
         return JSONResponse({"ok": True})
 
+    @app.get("/api/workspace/items")
+    async def workspace_items() -> JSONResponse:
+        docs = [
+            {"name": doc.name, "preview": doc.preview, "size": len(doc.content)}
+            for doc in STATE.workspace.documents.values()
+        ]
+        emails = [
+            {
+                "id": email.email_id,
+                "sender": email.sender,
+                "subject": email.subject,
+                "preview": email.body[:120],
+                "unread": email.unread,
+            }
+            for email in STATE.workspace.emails.values()
+        ]
+        demo_dir = config.REPO_ROOT / "demo_docs"
+        samples = []
+        if demo_dir.exists():
+            for p in sorted(demo_dir.glob("*.txt")):
+                samples.append({
+                    "filename": p.name,
+                    "is_poisoned": "POISONED" in p.name or "EVASIVE" in p.name,
+                })
+        return JSONResponse({"documents": docs, "emails": emails, "samples": samples})
+
+    @app.post("/api/sample/load")
+    async def load_sample(payload: dict[str, Any]) -> JSONResponse:
+        filename = str(payload.get("filename", "")).strip()
+        demo_path = config.REPO_ROOT / "demo_docs" / filename
+        if not demo_path.exists() or not demo_path.is_file():
+            return JSONResponse({"ok": False, "error": "Sample file not found"}, status_code=404)
+        content = demo_path.read_text(encoding="utf-8", errors="replace")
+        if "query" in filename.lower() or "mail" in filename.lower():
+            subj, sender, body = _parse_email(content, filename)
+            STATE.workspace.add_email(sender=sender, subject=subj, body=body)
+            STATE.emit("upload", {"name": subj, "kind": "email"})
+        else:
+            STATE.workspace.add_document(name=filename, content=content)
+            STATE.emit("upload", {"name": filename, "kind": "document"})
+        return JSONResponse({"ok": True, "name": filename})
+
+    @app.post("/api/backend")
+    async def switch_backend(payload: dict[str, Any]) -> JSONResponse:
+        global BACKEND, MODEL
+        req_backend = str(payload.get("backend", "auto")).strip().lower()
+        req_model = payload.get("model")
+        if req_model:
+            MODEL = str(req_model).strip()
+        BACKEND = req_backend
+        STATE.agent = None
+        agent = STATE.ensure_agent(BACKEND, MODEL)
+        STATE.emit(
+            "backend",
+            {"backend": agent.backend, "model": agent.model, "defense_on": STATE.defense_on},
+        )
+        return JSONResponse({"ok": True, "backend": agent.backend, "model": agent.model})
+
     return app
 
 
@@ -264,7 +322,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Sentinel-Z Live.")
     parser.add_argument("--host", default=config.UI_HOST)
     parser.add_argument("--port", type=int, default=config.UI_PORT + 1)
-    parser.add_argument("--backend", default="auto", choices=["auto", "llm", "scripted"])
+    parser.add_argument("--backend", default="auto", choices=["auto", "nvidia", "gemini", "ollama", "llm", "scripted"])
     parser.add_argument("--model", default=None, help="override SENTINELZ_OLLAMA_MODEL")
     args = parser.parse_args(argv)
 
