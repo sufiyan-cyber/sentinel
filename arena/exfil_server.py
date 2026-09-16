@@ -158,10 +158,10 @@ def _terminal_loop(typing_delay: float = TYPING_DELAY_S) -> None:
         newline()
 
 
-def _banner() -> None:
+def _banner(host: str = "0.0.0.0") -> None:
     print()
     print("=" * 78)
-    print(f"  COLLECTION ENDPOINT  --  listening on 0.0.0.0:{config.ATTACKER_PORT}")
+    print(f"  COLLECTION ENDPOINT  --  listening on {host}:{config.ATTACKER_PORT}")
     print("  every record that reaches this terminal left the victim's boundary")
     print("=" * 78)
     print()
@@ -184,7 +184,7 @@ def main(argv: list[str] | None = None) -> int:
         thread = threading.Thread(target=_terminal_loop, args=(args.typing_delay,), daemon=True)
         thread.start()
     else:
-        _banner()
+        _banner(args.host)
 
     uvicorn.run(create_app(), host=args.host, port=args.port, log_level="error")
     return 0

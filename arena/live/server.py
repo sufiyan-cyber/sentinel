@@ -347,8 +347,9 @@ def _parse_email(text: str, fallback_name: str) -> tuple[str, str, str]:
 
 def main(argv: list[str] | None = None) -> int:
     global BACKEND, MODEL
+    parser = argparse.ArgumentParser(description="Sentinel-Z Live.")
     port_default = int(os.environ.get("PORT", str(config.UI_PORT + 1)))
-    host_default = os.environ.get("HOST", config.UI_HOST)
+    host_default = os.environ.get("HOST", "0.0.0.0")
     parser.add_argument("--host", default=host_default)
     parser.add_argument("--port", type=int, default=port_default)
     parser.add_argument("--backend", default=config.LLM_BACKEND, choices=["auto", "nvidia", "gemini", "ollama", "llm", "scripted"])
@@ -359,7 +360,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Sentinel-Z Live   chat: http://{args.host}:{args.port}/")
     print(f"                  dash: http://{args.host}:{args.port}/dashboard")
     print(f"              attacker: {config.ATTACKER_URL}")
-    uvicorn.run(build_app(), host=args.host, port=args.port, log_level="warning")
+    uvicorn.run(build_app(), host=args.host, port=args.port, log_level="info")
     return 0
 
 
