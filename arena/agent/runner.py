@@ -19,7 +19,7 @@ from agentdojo.agent_pipeline.basic_elements import InitQuery, SystemMessage
 from agentdojo.agent_pipeline.tool_execution import ToolsExecutionLoop, ToolsExecutor, tool_result_to_str
 
 from arena import config
-from arena.agent.backends import GEMINI, OLLAMA, SCRIPTED, resolve_backend
+from arena.agent.backends import GEMINI, NVIDIA, OLLAMA, SCRIPTED, resolve_backend
 from arena.agent.scripted import SCRIPTED_MODEL_NAME, ScriptedLLM
 from arena.agent.session import Session, Step
 from arena.env import egress
@@ -53,7 +53,9 @@ class TargetAgent:
         self.max_steps = max_steps
         self.seed = seed
         self.backend = resolve_backend(backend)
-        if self.backend == OLLAMA:
+        if self.backend == NVIDIA:
+            default_model = config.NVIDIA_MODEL
+        elif self.backend == OLLAMA:
             default_model = config.OLLAMA_MODEL
         elif self.backend == GEMINI:
             default_model = config.GEMINI_MODEL
@@ -186,6 +188,10 @@ class TargetAgent:
             from arena.agent.gemini_llm import GeminiLLM
 
             return GeminiLLM(model=self.model)
+        if self.backend == NVIDIA:
+            from arena.agent.nvidia_llm import NvidiaLLM
+
+            return NvidiaLLM(model=self.model)
         from arena.agent.ollama_llm import OllamaLLM
 
         return OllamaLLM(model=self.model)

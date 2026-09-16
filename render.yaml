@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: aura
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/status
+    envVars:
+      - key: SENTINELZ_ROLE
+        value: victim
+      - key: SENTINELZ_LLM_BACKEND
+        value: gemini
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: SENTINELZ_GEMINI_MODEL
+        value: gemini-3.5-flash-lite
+      - key: HEADLESS
+        value: "true"

@@ -28,7 +28,18 @@ from arena.live.workspace import Workspace
 #: Results from these tools are attacker-controlled text. This is the single
 #: most important table in the package: it is what makes taint work.
 UNTRUSTED_RESULT_TOOLS: frozenset[str] = frozenset(
-    {"read_file", "get_unread_emails", "search_emails", "fetch_url", "search_web"}
+    {
+        "read_file",
+        "get_unread_emails",
+        "search_emails",
+        "fetch_url",
+        "search_web",
+        "browse_website",
+        "browser_search",
+        "browser_add_to_cart",
+        "browser_click",
+        "autonomous_browse",
+    }
 )
 
 #: Tools that move data out of the user's control.
@@ -55,6 +66,42 @@ def tool_schemas() -> list[dict[str, Any]]:
             "Search the user's mailbox.",
             {"query": ("string", "Text to search for.")},
             required=["query"],
+        ),
+        _schema(
+            "browse_website",
+            "Open any website URL (e.g. Amazon, Flipkart, Google, Wikipedia) in the live visible desktop browser window.",
+            {"url": ("string", "The website URL to open.")},
+            required=["url"],
+        ),
+        _schema(
+            "browser_search",
+            "Search for products or information on Amazon, Flipkart, or Google in the live visible desktop browser window.",
+            {
+                "query": ("string", "The search query (e.g. 'green t shirt')."),
+                "site": ("string", "The website to search on ('amazon', 'flipkart', or 'google'). Defaults to 'amazon'."),
+            },
+            required=["query"],
+        ),
+        _schema(
+            "browser_add_to_cart",
+            "Add a product to the shopping cart on Amazon or Flipkart in the live visible desktop browser window.",
+            {
+                "product": ("string", "Product name, keyword, or result number (e.g. 'green t-shirt' or '1')."),
+                "site": ("string", "The shopping site ('amazon' or 'flipkart'). Defaults to 'amazon'."),
+            },
+            required=["product"],
+        ),
+        _schema(
+            "browser_click",
+            "Click a button, link, or tab on the active live browser page.",
+            {"target": ("string", "Visible text or CSS selector of the button or link to click.")},
+            required=["target"],
+        ),
+        _schema(
+            "autonomous_browse",
+            "Perform an autonomous multi-step web browsing or shopping task in the live visible desktop browser (e.g. 'go to amazon, find a green t shirt and add to cart').",
+            {"task": ("string", "The natural language browsing/shopping task to perform.")},
+            required=["task"],
         ),
         _schema(
             "search_web",
@@ -208,6 +255,42 @@ class ToolBox:
         except Exception as exc:
             return f"error: could not fetch {url} ({type(exc).__name__})"
         return _readable_text(response.text)[:6000]
+
+    # ----------------------------------------------------------- live browser
+    def _t_browse_website(self, args: dict[str, Any]) -> str:
+        url = str(args.get("url", "")).strip()
+        if not url:
+            return "error: empty url"
+        from arena.live.browser import LiveBrowser
+        return LiveBrowser.get_instance().open_url(url)
+
+    def _t_browser_search(self, args: dict[str, Any]) -> str:
+        query = str(args.get("query", "")).strip()
+        site = str(args.get("site", "amazon")).strip()
+        if not query:
+            return "error: empty query"
+        from arena.live.browser import LiveBrowser
+        return LiveBrowser.get_instance().search_e_commerce(query, site=site)
+
+    def _t_browser_add_to_cart(self, args: dict[str, Any]) -> str:
+        product = str(args.get("product", "1")).strip()
+        site = str(args.get("site", "amazon")).strip()
+        from arena.live.browser import LiveBrowser
+        return LiveBrowser.get_instance().add_to_cart(product_keyword_or_index=product, site=site)
+
+    def _t_browser_click(self, args: dict[str, Any]) -> str:
+        target = str(args.get("target", "")).strip()
+        if not target:
+            return "error: empty click target"
+        from arena.live.browser import LiveBrowser
+        return LiveBrowser.get_instance().click_element(target)
+
+    def _t_autonomous_browse(self, args: dict[str, Any]) -> str:
+        task = str(args.get("task", "")).strip()
+        if not task:
+            return "error: empty browsing task"
+        from arena.live.browser import LiveBrowser
+        return LiveBrowser.get_instance().run_autonomous_task(task)
 
     # ------------------------------------------------------------ egress
     def _t_send_email(self, args: dict[str, Any]) -> str:

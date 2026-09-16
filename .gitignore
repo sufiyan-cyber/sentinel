@@ -1,13 +1,43 @@
+# Environments and virtualenvs
 .venv/
+env/
+venv/
+
+# Byte-compiled / optimized files
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
 *.egg-info/
 build/
 dist/
+
+# Secrets and environment configurations (AGENTS.md invariant)
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Experiment runs, data, browser profiles and logs (AGENTS.md invariant)
 runs/
+data/
+*.log
+trace.zip
+
+# Testing, caching and linter artifacts
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.coverage
 .hf_cache/
-*.log
+
+# OS and editor artifacts
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Playwright & browser automation temp dirs
+.playwright/
+browser-use-user-data-dir-*/

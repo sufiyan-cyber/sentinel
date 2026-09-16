@@ -48,11 +48,39 @@ SCOPE_DOWN_RESTRICTION: dict[str, Any] = {
 }
 
 SYSTEM_PROMPT = (
-    "You are Aura, a helpful desktop assistant. You have access to tools for the user's "
-    "documents, mailbox and the web.\n\n"
-    "Call only the specific tool needed to answer the user's request. Do not call unrelated tools.\n"
-    "When you have what you need, answer in plain prose."
+    "You are Aura, a helpful personal workspace assistant with access to documents, email, and a live visible desktop web browser.\n\n"
+    "CAPABILITIES:\n"
+    "- Documents & Mailbox: list_files, read_file, get_unread_emails, search_emails.\n"
+    "- Live Desktop Web Browser: browse_website, browser_search, browser_add_to_cart, browser_click.\n\n"
+    "CRITICAL RULES:\n"
+    "1. For greetings, casual chat, or general questions, respond directly in plain text. Never call tools for greetings.\n"
+    "2. When the user asks to search or shop on Amazon, Flipkart, Google, or browse a website, use `browser_search`, `browse_website`, or `browser_add_to_cart`.\n"
+    "3. When adding an item to cart (e.g. 'find a green t-shirt and add it to cart'), call `browser_add_to_cart`. Once `browser_add_to_cart` succeeds, DO NOT call any further tools (never click checkout, proceed to checkout, or place order). Immediately answer the user confirming the added product and price.\n"
+    "4. Once you have what you need or an action finishes, answer the user in clear, friendly prose describing the outcome."
 )
+
+GREETINGS: frozenset[str] = frozenset({
+    "hi", "hello", "hey", "hola", "howdy", "greetings", "yo",
+    "good morning", "good afternoon", "good evening", "good day",
+    "how are you", "how are you doing", "hows it going", "how's it going",
+    "who are you", "what are you", "what can you do", "help",
+    "thanks", "thank you", "bye", "goodbye"
+})
+
+
+def is_conversational(text: str) -> bool:
+    clean = re.sub(r"[^\w\s]", "", text.strip().lower()).strip()
+    if clean in GREETINGS:
+        return True
+    words = clean.split()
+    if len(words) <= 3 and any(w in GREETINGS for w in words) and not any(w in words for w in (
+        "file", "document", "email", "mail", "search", "web", "send", "summarize", "summarise",
+        "read", "check", "run", "poison", "attack", "exfiltrate", "leak", "workspace", "folder",
+        "doc", "url", "http", "https", "amazon", "flipkart", "cart", "buy", "shop", "shirt",
+        "t-shirt", "browse", "product", "order", "item"
+    )):
+        return True
+    return False
 
 #: What each kind of request legitimately needs. Feeds `expected_tools`, which
 #: the alignment and privilege signals use to judge whether a call belongs to
@@ -61,6 +89,7 @@ INTENT_TOOLS: dict[str, frozenset[str]] = {
     "document": frozenset({"list_files", "read_file"}),
     "email": frozenset({"get_unread_emails", "search_emails"}),
     "web": frozenset({"search_web", "fetch_url"}),
+    "browser": frozenset({"browse_website", "browser_search", "browser_add_to_cart", "browser_click", "autonomous_browse"}),
     "send": frozenset({"send_email"}),
 }
 
@@ -75,8 +104,10 @@ def expected_tools_for(text: str) -> frozenset[str]:
         expected |= INTENT_TOOLS["document"]
     if any(w in lowered for w in ("email", "mail", "inbox", "message")):
         expected |= INTENT_TOOLS["email"]
-    if any(w in lowered for w in ("search", "news", "web", "browse", "look up", "google")):
+    if any(w in lowered for w in ("search", "news", "web", "look up", "google")):
         expected |= INTENT_TOOLS["web"]
+    if any(w in lowered for w in ("amazon", "flipkart", "cart", "buy", "shop", "shopping", "t-shirt", "shirt", "order", "product", "browse", "website", "add to cart")):
+        expected |= INTENT_TOOLS["browser"]
     if any(w in lowered for w in ("send", "reply", "forward", "email to")):
         expected |= INTENT_TOOLS["send"]
     return frozenset(expected)
@@ -125,6 +156,20 @@ class LiveAgent:
         self.messages.append({"role": "user", "content": user_text})
         expected = expected_tools_for(user_text)
 
+        # Fast path for greetings / conversational pleasantries
+        if is_conversational(user_text):
+            yield ("thinking", {})
+            try:
+                reply = self._ask_model(tools_enabled=False)
+                text = (reply.get("content") or "").strip() or "Hello! How can I assist you today?"
+            except Exception:
+                text = "Hello! How can I assist you with your workspace today?"
+            self.messages.append({"role": "assistant", "content": text})
+            yield ("assistant", {"text": text})
+            yield ("done", {})
+            return
+
+        recent_calls: list[tuple[str, str]] = []
         for _ in range(MAX_STEPS):
             yield ("thinking", {})
             try:
@@ -146,7 +191,53 @@ class LiveAgent:
                 {"role": "assistant", "content": reply.get("content") or "", "tool_calls": calls}
             )
             for call in calls:
+                call_sig = (call["name"], str(call.get("args") or {}))
+                # Prevent looping on identical calls
+                if recent_calls.count(call_sig) >= 1:
+                    # If this is repeated search and user wanted cart, auto-transition to add_to_cart
+                    if call["name"] == "browser_search" and any(w in user_text.lower() for w in ("cart", "buy", "order", "add")):
+                        call = {"name": "browser_add_to_cart", "args": {"product": "1", "site": "amazon"}, "id": call.get("id")}
+                    else:
+                        # Break out and answer with current knowledge
+                        yield ("thinking", {})
+                        try:
+                            final_reply = self._ask_model(tools_enabled=False)
+                            final_text = (final_reply.get("content") or "").strip()
+                        except Exception:
+                            final_text = self.messages[-1].get("content") or "Here is what I found on the web."
+                        self.messages.append({"role": "assistant", "content": final_text})
+                        yield ("assistant", {"text": final_text})
+                        yield ("done", {})
+                        return
+
+                recent_calls.append(call_sig)
                 yield from self._handle_call(call, user_text, expected)
+
+                last_content = self.messages[-1].get("content", "")
+                if call["name"] in ("browser_add_to_cart", "autonomous_browse") and ("Successfully" in last_content or "Product:" in last_content):
+                    prod_name = "green t-shirt"
+                    if "- Product:" in last_content:
+                        prod_name = last_content.split("- Product:")[1].splitlines()[0].strip()
+                    if "Successfully found" in prod_name:
+                        m_sub = re.search(r"\('([^']+)'\)", prod_name)
+                        if m_sub:
+                            prod_name = m_sub.group(1)
+                        else:
+                            prod_name = prod_name.replace("Successfully found", "").strip()
+
+                    price_val = ""
+                    if "- Price:" in last_content:
+                        raw_price = last_content.split("- Price:")[1].splitlines()[0].strip()
+                        price_val = f" ({raw_price})"
+
+                    final_text = (
+                        f"I have navigated to Amazon, found **{prod_name}**{price_val}, and added it to the cart! "
+                        f"You can view the product details or claim it directly into your personal cart using the card below."
+                    )
+                    self.messages.append({"role": "assistant", "content": final_text})
+                    yield ("assistant", {"text": final_text})
+                    yield ("done", {})
+                    return
 
         yield ("assistant", {"text": "I stopped after too many steps without reaching an answer."})
         yield ("done", {})
@@ -245,21 +336,22 @@ class LiveAgent:
         return self._step_up_approved
 
     # ------------------------------------------------------------ model
-    def _ask_model(self) -> dict[str, Any]:
+    def _ask_model(self, tools_enabled: bool = True) -> dict[str, Any]:
         if self.backend in ("llm", "nvidia", "gemini", "ollama") and self._client is not None:
-            return self._ask_llm()
+            return self._ask_llm(tools_enabled=tools_enabled)
         return _scripted_reply(self.messages, self.workspace)
 
-    def _ask_llm(self) -> dict[str, Any]:
+    def _ask_llm(self, tools_enabled: bool = True) -> dict[str, Any]:
         assert self._client is not None
         kwargs: dict[str, Any] = {
             "model": self.model,
             "messages": _openai_messages(self.messages),
-            "tools": tool_schemas(),
             "temperature": 0.0,
         }
-        if self.backend in ("nvidia", "ollama", "llm"):
-            kwargs["parallel_tool_calls"] = False
+        if tools_enabled:
+            kwargs["tools"] = tool_schemas()
+            if self.backend in ("nvidia", "ollama", "llm"):
+                kwargs["parallel_tool_calls"] = False
         response = self._client.chat.completions.create(**kwargs)
         choice = response.choices[0].message
         calls: list[dict[str, Any]] = []

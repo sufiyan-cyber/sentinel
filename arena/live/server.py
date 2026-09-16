@@ -92,7 +92,7 @@ class LiveState:
 
 
 STATE = LiveState()
-BACKEND = "auto"
+BACKEND = config.LLM_BACKEND
 MODEL: str | None = None
 
 
@@ -104,6 +104,10 @@ def _run_turn(text: str) -> None:
         return
     state.busy = True
     try:
+        from arena.live.browser import LiveBrowser
+        LiveBrowser._step_listener = lambda step, thought, action: state.emit(
+            "browser_step", {"step": step, "thought": thought, "action": action}
+        )
         agent = state.ensure_agent(BACKEND, MODEL)
         state.emit(
             "backend",
@@ -113,10 +117,33 @@ def _run_turn(text: str) -> None:
             if event == "decision":
                 state.decisions.append(payload)
             state.emit(event, payload)
+            if event == "tool_result" and payload.get("tool") in (
+                "browser_add_to_cart", "browser_search", "browse_website", "autonomous_browse"
+            ):
+                try:
+                    from arena.live.browser import LiveBrowser
+                    lb = LiveBrowser._instance
+                    if lb and lb.latest_url:
+                        prod_title = lb.latest_product.get("title") if lb.latest_product else lb.latest_title
+                        price_val = lb.latest_product.get("price") if lb.latest_product else ""
+                        state.emit("browser_open", {
+                            "url": lb.latest_url,
+                            "cart_url": lb.latest_cart_url or lb.latest_url,
+                            "title": lb.latest_title or prod_title,
+                            "product": prod_title,
+                            "price": price_val,
+                            "screenshot": getattr(lb, "latest_screenshot_b64", ""),
+                            "tool": payload.get("tool"),
+                        })
+                except Exception:
+                    pass
     except Exception as exc:  # a UI must not die on one bad turn
         state.emit("assistant", {"text": f"Something broke: {type(exc).__name__}: {exc}"})
         state.emit("done", {})
     finally:
+        with contextlib.suppress(Exception):
+            from arena.live.browser import LiveBrowser
+            LiveBrowser._step_listener = None
         state.busy = False
 
 
@@ -155,11 +182,11 @@ def build_app() -> FastAPI:
 
     @app.get("/api/status")
     async def status() -> JSONResponse:
-        agent = STATE.agent
+        agent = STATE.ensure_agent(BACKEND, MODEL)
         return JSONResponse(
             {
-                "backend": agent.backend if agent else BACKEND,
-                "model": agent.model if agent else (MODEL or config.OLLAMA_MODEL),
+                "backend": agent.backend,
+                "model": agent.model,
                 "defense_on": STATE.defense_on,
                 "busy": STATE.busy,
                 "documents": sorted(STATE.workspace.documents),
@@ -319,10 +346,11 @@ def _parse_email(text: str, fallback_name: str) -> tuple[str, str, str]:
 
 def main(argv: list[str] | None = None) -> int:
     global BACKEND, MODEL
-    parser = argparse.ArgumentParser(description="Sentinel-Z Live.")
-    parser.add_argument("--host", default=config.UI_HOST)
-    parser.add_argument("--port", type=int, default=config.UI_PORT + 1)
-    parser.add_argument("--backend", default="auto", choices=["auto", "nvidia", "gemini", "ollama", "llm", "scripted"])
+    port_default = int(os.environ.get("PORT", str(config.UI_PORT + 1)))
+    host_default = os.environ.get("HOST", config.UI_HOST)
+    parser.add_argument("--host", default=host_default)
+    parser.add_argument("--port", type=int, default=port_default)
+    parser.add_argument("--backend", default=config.LLM_BACKEND, choices=["auto", "nvidia", "gemini", "ollama", "llm", "scripted"])
     parser.add_argument("--model", default=None, help="override SENTINELZ_OLLAMA_MODEL")
     args = parser.parse_args(argv)
 

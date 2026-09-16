@@ -19,20 +19,33 @@ let currentModel = "";
 let sessionHistory = [];
 
 const TOOL = {
-  list_files:        { icon: "i-folder", verb: "Listing workspace documents" },
-  read_file:         { icon: "i-file",   verb: "Reading" },
-  get_unread_emails: { icon: "i-mail",   verb: "Checking unread emails" },
-  search_emails:     { icon: "i-search", verb: "Searching mailbox" },
-  search_web:        { icon: "i-globe",  verb: "Searching the web" },
-  fetch_url:         { icon: "i-globe",  verb: "Opening URL" },
-  send_email:        { icon: "i-mail",   verb: "Sending email" },
-  send_to_external:  { icon: "i-upload", verb: "Transmitting external data" },
+  list_files:          { icon: "i-folder", verb: "Listing workspace documents" },
+  read_file:           { icon: "i-file",   verb: "Reading" },
+  get_unread_emails:   { icon: "i-mail",   verb: "Checking unread emails" },
+  search_emails:       { icon: "i-search", verb: "Searching mailbox" },
+  search_web:          { icon: "i-globe",  verb: "Searching the web" },
+  fetch_url:           { icon: "i-globe",  verb: "Opening URL" },
+  send_email:          { icon: "i-mail",   verb: "Sending email" },
+  send_to_external:    { icon: "i-upload", verb: "Transmitting external data" },
+  browse_website:      { icon: "i-globe",  verb: "Opening website in browser" },
+  browser_search:      { icon: "i-search", verb: "Searching live on" },
+  browser_add_to_cart: { icon: "i-cart",   verb: "Adding product to cart on" },
+  browser_click:       { icon: "i-spark",  verb: "Interacting with page in browser" },
+  autonomous_browse:   { icon: "i-spark",  verb: "Autonomous AI Web Agent" },
 };
 
 function label(tool, args) {
   const t = TOOL[tool] || { verb: tool };
   if (tool === "read_file") return `${t.verb} ${args.filename || ""}`.trim();
   if (tool === "fetch_url") return `${t.verb} ${args.url || ""}`.trim();
+  if (tool === "browse_website") return `Opening ${args.url || "web page"} in live browser`;
+  if (tool === "browser_search") return `Searching “${args.query || ""}” on ${args.site || "the web"} (live browser)`;
+  if (tool === "browser_add_to_cart") return `Adding “${args.product || ""}” to cart on ${args.site || "store"} (live browser)`;
+  if (tool === "browser_click") return `Clicking “${args.target || args.selector || "element"}” in live browser`;
+  if (tool === "autonomous_browse") {
+    const q = args.task || "Browsing web...";
+    return `Autonomous AI Browser: ${q.length > 55 ? q.slice(0, 55) + "…" : q}`;
+  }
   if (tool === "search_web" || tool === "search_emails") return `${t.verb} for “${args.query || ""}”`;
   if (tool === "send_email") return `${t.verb} to ${args.to || ""}`;
   if (tool === "send_to_external") return `${t.verb} to ${args.url || ""}`;
@@ -431,7 +444,7 @@ async function send(text) {
   busy = true;
   $("btn-send").disabled = true;
   window.auraOrb?.busy(true);
-  newTrace();
+  trace = null;
 
   try {
     await fetch("/api/chat", {
@@ -451,7 +464,7 @@ async function send(text) {
 const source = new EventSource("/events");
 
 function setBackend(d) {
-  currentBackend = d.backend || "auto";
+  currentBackend = d.backend || "nvidia";
   currentModel = d.model || "";
   const b = $("pill-backend");
   if (d.backend === "nvidia") {
@@ -463,9 +476,12 @@ function setBackend(d) {
   } else if (d.backend === "ollama") {
     b.textContent = `Ollama (${d.model || "llama3.1:8b"})`;
     b.className = "pill ok";
-  } else {
+  } else if (d.backend === "scripted") {
     b.textContent = "Scripted (Offline)";
     b.className = "pill warn";
+  } else {
+    b.textContent = `NVIDIA (Llama-3.2-11B)`;
+    b.className = "pill ok";
   }
 
   if (d.defense_on !== undefined) {
@@ -499,6 +515,29 @@ source.addEventListener("tool_result", (e) => {
   finishStep(step, !d.refused);
 });
 
+source.addEventListener("browser_step", (e) => {
+  const d = JSON.parse(e.data);
+  if (!trace) return;
+  const open = [...trace.querySelectorAll('.step[data-pending="1"]')];
+  const stepEl = open.find((s) => s.dataset.tool === "autonomous_browse" || s.dataset.tool?.startsWith("browser")) || open[open.length - 1];
+  if (stepEl) {
+    const what = stepEl.querySelector(".what");
+    if (what) {
+      const thoughtText = d.thought ? d.thought : (d.action ? d.action : `Step ${d.step}`);
+      what.innerHTML = "";
+      const badge = document.createElement("span");
+      badge.className = "browser-step-badge";
+      badge.textContent = `Step ${d.step}`;
+      const textSpan = document.createElement("span");
+      textSpan.className = "browser-step-text";
+      textSpan.textContent = thoughtText.length > 90 ? thoughtText.slice(0, 90) + "…" : thoughtText;
+      what.appendChild(badge);
+      what.appendChild(textSpan);
+      stick();
+    }
+  }
+});
+
 source.addEventListener("stepup_request", (e) => {
   const d = JSON.parse(e.data);
   clearHero();
@@ -526,8 +565,58 @@ source.addEventListener("stepup_request", (e) => {
   stick();
 });
 
+source.addEventListener("browser_open", (e) => {
+  const d = JSON.parse(e.data);
+  if (!d.url) return;
+  // Automatically open the real product page in a new tab!
+  try {
+    window.open(d.url, "_blank");
+  } catch (_) {}
+
+  clearHero();
+  const card = document.createElement("div");
+  card.className = "live-browser-card";
+  const isCart = d.tool === "browser_add_to_cart" || d.url.includes("cart") || Boolean(d.cart_url);
+  const siteName = d.url.includes("amazon") ? "Amazon.in" : d.url.includes("flipkart") ? "Flipkart" : "Live Web";
+
+  const screenshotHtml = d.screenshot
+    ? `<div class="lbc-shot-wrap"><img class="lbc-shot" src="data:image/jpeg;base64,${d.screenshot}" alt="Live Page Preview" /></div>`
+    : "";
+
+  const cartButtonHtml = d.cart_url && d.cart_url !== d.url
+    ? `<a href="${d.cart_url}" target="_blank" rel="noopener noreferrer" class="btn lbc-btn secondary">
+         <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><use href="#i-cart"/></svg>
+         <span>Add to Your Amazon Cart ↗</span>
+       </a>`
+    : "";
+
+  card.innerHTML = `
+    <div class="lbc-top">
+      <span class="lbc-tag ${isCart ? 'cart' : 'browse'}">${isCart ? '🛒 PRODUCT READY' : '🌐 LIVE BROWSER'}</span>
+      <span class="lbc-site">${siteName}</span>
+    </div>
+    ${screenshotHtml}
+    <div class="lbc-content">
+      <div class="lbc-title">${d.product || d.title || 'Product'}</div>
+      ${d.price ? `<div class="lbc-price">${d.price}</div>` : ''}
+    </div>
+    <div class="lbc-actions">
+      <a href="${d.url}" target="_blank" rel="noopener noreferrer" class="btn primary lbc-btn">
+        <span>Open Product on ${siteName} ↗</span>
+      </a>
+      ${cartButtonHtml}
+    </div>
+  `;
+  thread.appendChild(card);
+  enter(card);
+  stick();
+});
+
 source.addEventListener("assistant", (e) => {
   clearHero();
+  if (trace && trace.children.length === 0) {
+    trace.remove();
+  }
   addBubble("ai", JSON.parse(e.data).text);
   trace = null;
 });
@@ -536,6 +625,9 @@ source.addEventListener("done", () => {
   busy = false;
   $("btn-send").disabled = false;
   window.auraOrb?.busy(false);
+  if (trace && trace.children.length === 0) {
+    trace.remove();
+  }
   trace = null;
 });
 

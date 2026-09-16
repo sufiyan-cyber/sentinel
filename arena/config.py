@@ -45,7 +45,7 @@ NVIDIA_MODEL: str = _env("SENTINELZ_NVIDIA_MODEL", "meta/llama-3.2-11b-vision-in
 #: Google Gemini API configuration (via official OpenAI-compatible endpoint)
 GEMINI_API_KEY: str = _env("GEMINI_API_KEY", "") or _env("GOOGLE_API_KEY", "")
 GEMINI_BASE_URL: str = _env("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/")
-GEMINI_MODEL: str = _env("SENTINELZ_GEMINI_MODEL", "gemini-3.6-flash")
+GEMINI_MODEL: str = _env("SENTINELZ_GEMINI_MODEL", "gemini-3.5-flash-lite")
 
 ATTACKER_HOST: str = _env("SENTINELZ_ATTACKER_HOST", "127.0.0.1")
 ATTACKER_PORT: int = _int_env("SENTINELZ_ATTACKER_PORT", 8899)

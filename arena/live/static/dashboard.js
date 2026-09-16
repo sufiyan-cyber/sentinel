@@ -133,9 +133,12 @@ function setBackend(d) {
   } else if (d.backend === "ollama") {
     b.textContent = `Ollama (${d.model || "llama3.1:8b"})`;
     b.className = "pill ok";
-  } else {
+  } else if (d.backend === "scripted") {
     b.textContent = "Scripted (Offline)";
     b.className = "pill warn";
+  } else {
+    b.textContent = `NVIDIA (Llama-3.2-11B)`;
+    b.className = "pill ok";
   }
 
   if (d.defense_on === false) {
