@@ -165,7 +165,7 @@ def target_live_solo(argv: list[str]) -> int:
     env = {"SENTINELZ_ATTACKER_HOST": "127.0.0.1"}
     print("starting the collection server in the background on 127.0.0.1")
     server = subprocess.Popen(
-        [PYTHON, "-m", "arena.exfil_server"],
+        [PYTHON, "-m", "arena.exfil_server", "--host", "127.0.0.1"],
         cwd=str(REPO_ROOT),
         env={**os.environ, **CHILD_ENV, **env},
     )

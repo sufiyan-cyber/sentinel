@@ -10,7 +10,11 @@ services:
       - key: SENTINELZ_ROLE
         value: victim
       - key: SENTINELZ_LLM_BACKEND
-        value: gemini
+        value: nvidia
+      - key: NVIDIA_API_KEY
+        sync: false
+      - key: SENTINELZ_NVIDIA_MODEL
+        value: meta/llama-3.2-11b-vision-instruct
       - key: GEMINI_API_KEY
         sync: false
       - key: SENTINELZ_GEMINI_MODEL
