@@ -75,10 +75,10 @@ def tool_schemas() -> list[dict[str, Any]]:
         ),
         _schema(
             "browser_search",
-            "Search for products or information on Amazon, Flipkart, or Google in the live visible desktop browser window.",
+            "Search for e-commerce shopping products on Amazon or Flipkart in the live visible desktop browser window.",
             {
-                "query": ("string", "The search query (e.g. 'green t shirt')."),
-                "site": ("string", "The website to search on ('amazon', 'flipkart', or 'google'). Defaults to 'amazon'."),
+                "query": ("string", "The product search query (e.g. 'green t shirt')."),
+                "site": ("string", "The shopping website ('amazon' or 'flipkart'). Defaults to 'amazon'."),
             },
             required=["query"],
         ),
@@ -99,14 +99,14 @@ def tool_schemas() -> list[dict[str, Any]]:
         ),
         _schema(
             "autonomous_browse",
-            "Perform an autonomous multi-step web browsing or shopping task in the live visible desktop browser (e.g. 'go to amazon, find a green t shirt and add to cart').",
-            {"task": ("string", "The natural language browsing/shopping task to perform.")},
+            "Perform an autonomous multi-step e-commerce shopping task on Amazon or Flipkart in the live visible desktop browser (e.g. 'go to amazon, find a green t shirt and add to cart').",
+            {"task": ("string", "The natural language shopping task to perform.")},
             required=["task"],
         ),
         _schema(
             "search_web",
-            "Search the public web and return result titles, snippets and URLs.",
-            {"query": ("string", "The search query.")},
+            "Search the public internet for news, latest events, articles, or general information and return titles, snippets and URLs.",
+            {"query": ("string", "The web or news search query in English.")},
             required=["query"],
         ),
         _schema(
@@ -133,6 +133,19 @@ def tool_schemas() -> list[dict[str, Any]]:
                 "data": ("string", "Payload to send."),
             },
             required=["url", "data"],
+        ),
+        _schema(
+            "place_phone_call",
+            "Place an agentic phone call via CALL-E to a phone number or contact (e.g. 'my friend') and speak a message to them.",
+            {
+                "phone": (
+                    "string",
+                    "Recipient phone number (e.g. '+919876543210') or 'friend' to use the default friend phone number.",
+                ),
+                "message": ("string", "The message or instruction to tell the recipient on the call."),
+                "recipient_name": ("string", "Name or label of the person being called (e.g. 'friend')."),
+            },
+            required=["message"],
         ),
     ]
 
@@ -269,6 +282,8 @@ class ToolBox:
         site = str(args.get("site", "amazon")).strip()
         if not query:
             return "error: empty query"
+        if site.lower() == "google" or ("news" in query.lower() and site.lower() not in ("flipkart",)):
+            return self._t_search_web({"query": query})
         from arena.live.browser import LiveBrowser
         return LiveBrowser.get_instance().search_e_commerce(query, site=site)
 
@@ -311,6 +326,23 @@ class ToolBox:
         self.sent.append({"tool": "send_to_external", "url": url, "data": data})
         _post_to_collector(data, source="send_to_external")
         return f"POSTed {len(data)} bytes to {url}."
+
+    def _t_place_phone_call(self, args: dict[str, Any]) -> str:
+        phone = str(args.get("phone") or "").strip()
+        message = str(args.get("message") or "").strip()
+        recipient_name = str(args.get("recipient_name") or "friend").strip()
+        from arena.live.calle import CALLE_SERVICE
+
+        res = CALLE_SERVICE.place_call(phone=phone, message=message, recipient_name=recipient_name)
+        if res.get("ok") and res.get("dispatched"):
+            return (
+                f"Call dispatched via CALL-E!\n"
+                f"- Call ID: {res.get('call_id')}\n"
+                f"- Recipient: {res.get('recipient')} ({res.get('phone')})\n"
+                f"- Status: {res.get('status')}\n"
+                f"- Message: {res.get('message')}"
+            )
+        return f"error: {res.get('error', 'Failed to dispatch CALL-E phone call.')}"
 
 
 # ------------------------------------------------------------- helpers

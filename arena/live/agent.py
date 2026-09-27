@@ -48,15 +48,19 @@ SCOPE_DOWN_RESTRICTION: dict[str, Any] = {
 }
 
 SYSTEM_PROMPT = (
-    "You are Aura, a helpful personal workspace assistant with access to documents, email, and a live visible desktop web browser.\n\n"
+    "You are Aura, a helpful personal workspace assistant with access to documents, email, web search, a live visible desktop web browser, and CALL-E agentic phone calling.\n\n"
     "CAPABILITIES:\n"
     "- Documents & Mailbox: list_files, read_file, get_unread_emails, search_emails.\n"
-    "- Live Desktop Web Browser: browse_website, browser_search, browser_add_to_cart, browser_click.\n\n"
+    "- General Web & News Search: search_web, fetch_url.\n"
+    "- Live Shopping & Desktop Browser: browse_website, browser_search, browser_add_to_cart, browser_click.\n"
+    "- Phone Calling (CALL-E): place_phone_call.\n\n"
     "CRITICAL RULES:\n"
     "1. For greetings, casual chat, or general questions, respond directly in plain text. Never call tools for greetings.\n"
-    "2. When the user asks to search or shop on Amazon, Flipkart, Google, or browse a website, use `browser_search`, `browse_website`, or `browser_add_to_cart`.\n"
-    "3. When adding an item to cart (e.g. 'find a green t-shirt and add it to cart'), call `browser_add_to_cart`. Once `browser_add_to_cart` succeeds, DO NOT call any further tools (never click checkout, proceed to checkout, or place order). Immediately answer the user confirming the added product and price.\n"
-    "4. Once you have what you need or an action finishes, answer the user in clear, friendly prose describing the outcome."
+    "2. For general internet searches, news, current events, or factual queries, ALWAYS use `search_web` (do NOT open Amazon for news or general web searches).\n"
+    "3. When the user asks to shop or search for products on Amazon or Flipkart, use `browser_search` or `browser_add_to_cart`.\n"
+    "4. When the user asks to call someone on the phone (e.g. 'call my friend and tell them...', 'call +91... and say...'), use `place_phone_call`. If no phone number is stated, pass `phone='friend'`.\n"
+    "5. When adding an item to cart (e.g. 'find a green t-shirt and add it to cart'), call `browser_add_to_cart`. Once `browser_add_to_cart` succeeds, DO NOT call any further tools (never click checkout, proceed to checkout, or place order). Immediately answer the user confirming the added product and price.\n"
+    "6. Once you have what you need or an action finishes, answer the user in clear, friendly prose describing the outcome."
 )
 
 GREETINGS: frozenset[str] = frozenset({
@@ -73,14 +77,19 @@ def is_conversational(text: str) -> bool:
     if clean in GREETINGS:
         return True
     words = clean.split()
-    if len(words) <= 3 and any(w in GREETINGS for w in words) and not any(w in words for w in (
-        "file", "document", "email", "mail", "search", "web", "send", "summarize", "summarise",
-        "read", "check", "run", "poison", "attack", "exfiltrate", "leak", "workspace", "folder",
-        "doc", "url", "http", "https", "amazon", "flipkart", "cart", "buy", "shop", "shirt",
-        "t-shirt", "browse", "product", "order", "item"
-    )):
-        return True
-    return False
+    return bool(
+        len(words) <= 3
+        and any(w in GREETINGS for w in words)
+        and not any(
+            w in words
+            for w in (
+                "file", "document", "email", "mail", "search", "web", "send", "summarize", "summarise",
+                "read", "check", "run", "poison", "attack", "exfiltrate", "leak", "workspace", "folder",
+                "doc", "url", "http", "https", "amazon", "flipkart", "cart", "buy", "shop", "shirt",
+                "t-shirt", "browse", "product", "order", "item", "call", "phone", "dial", "ring"
+            )
+        )
+    )
 
 #: What each kind of request legitimately needs. Feeds `expected_tools`, which
 #: the alignment and privilege signals use to judge whether a call belongs to
@@ -91,6 +100,7 @@ INTENT_TOOLS: dict[str, frozenset[str]] = {
     "web": frozenset({"search_web", "fetch_url"}),
     "browser": frozenset({"browse_website", "browser_search", "browser_add_to_cart", "browser_click", "autonomous_browse"}),
     "send": frozenset({"send_email"}),
+    "call": frozenset({"place_phone_call"}),
 }
 
 
@@ -110,6 +120,8 @@ def expected_tools_for(text: str) -> frozenset[str]:
         expected |= INTENT_TOOLS["browser"]
     if any(w in lowered for w in ("send", "reply", "forward", "email to")):
         expected |= INTENT_TOOLS["send"]
+    if any(w in lowered for w in ("call", "phone", "dial", "ring", "tell my friend", "tell them")):
+        expected |= INTENT_TOOLS["call"]
     return frozenset(expected)
 
 
@@ -214,6 +226,22 @@ class LiveAgent:
                 yield from self._handle_call(call, user_text, expected)
 
                 last_content = self.messages[-1].get("content", "")
+                if call["name"] == "place_phone_call" and "Call dispatched via CALL-E" in last_content:
+                    recip_info = "your contact"
+                    msg_info = call.get("args", {}).get("message", "")
+                    if "- Recipient:" in last_content:
+                        recip_info = last_content.split("- Recipient:")[1].splitlines()[0].strip()
+                    if "- Message:" in last_content:
+                        msg_info = last_content.split("- Message:")[1].splitlines()[0].strip()
+                    final_text = (
+                        f"I have dispatched the phone call via CALL-E to **{recip_info}** "
+                        f"with the message: *\"{msg_info}\"*."
+                    )
+                    self.messages.append({"role": "assistant", "content": final_text})
+                    yield ("assistant", {"text": final_text})
+                    yield ("done", {})
+                    return
+
                 if call["name"] in ("browser_add_to_cart", "autonomous_browse") and ("Successfully" in last_content or "Product:" in last_content):
                     prod_name = "green t-shirt"
                     if "- Product:" in last_content:
@@ -556,6 +584,8 @@ def _scripted_reply(messages: list[dict[str, Any]], workspace: Workspace) -> dic
 
     # 2. Otherwise walk the user's actual request.
     intent = _primary_intent(user_text)
+    if intent == "call" and step == 0:
+        return _one("place_phone_call", {"phone": "friend", "message": user_text})
     if intent == "email" and step == 0:
         return _one("get_unread_emails", {})
     if intent == "web" and step == 0:
@@ -577,6 +607,8 @@ def _primary_intent(text: str) -> str:
     up in requests about every source there is.
     """
     lowered = text.lower()
+    if any(w in lowered for w in ("call ", "phone", "dial", "ring")):
+        return "call"
     if any(w in lowered for w in ("email", "inbox", "mail", "message")):
         return "email"
     if any(w in lowered for w in ("news", "search the web", "browse", "look up", "google", "search for")):

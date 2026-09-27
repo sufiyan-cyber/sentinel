@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Aura — AI Workspace Assistant</title>
-<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/style.css?v=4">
 </head>
 <body>
 
@@ -35,6 +35,9 @@
     <g id="i-loader"><path d="M10 3.2v3M10 13.8v3M16.8 10h-3M6.2 10h-3M14.8 5.2l-2.1 2.1M7.3 12.7l-2.1 2.1M14.8 14.8l-2.1-2.1M7.3 7.3 5.2 5.2"/></g>
     <g id="i-flask"><path d="M8 3h4M10 3v5l-4 7a2 2 0 0 0 1.7 3h8.6a2 2 0 0 0 1.7-3l-4-7V3"/><path d="M7.5 14h9"/></g>
     <g id="i-cart"><circle cx="7" cy="16.5" r="1.5"/><circle cx="15" cy="16.5" r="1.5"/><path d="M2 3h2.5l2.2 9.2h9.6l2-6.2H6.2"/></g>
+    <g id="i-mic"><rect x="7" y="2.5" width="6" height="9.5" rx="3"/><path d="M4.5 9.5a5.5 5.5 0 0 0 11 0M10 15v2.5M7 17.5h6"/></g>
+    <g id="i-volume"><path d="M9 5.5 5.5 8H3v4h2.5L9 14.5z"/><path d="M12.5 7.5a3.5 3.5 0 0 1 0 5M14.8 5.2a6.8 6.8 0 0 1 0 9.6"/></g>
+    <g id="i-phone"><path d="M5.5 3.5h2.4l1.2 3.2-1.6 1.2a10.5 10.5 0 0 0 4.6 4.6l1.2-1.6 3.2 1.2v2.4a1.5 1.5 0 0 1-1.5 1.5A12.5 12.5 0 0 1 4 5a1.5 1.5 0 0 1 1.5-1.5z"/></g>
   </defs>
 </svg>
 
@@ -112,6 +115,26 @@
             Demo Fixtures
             <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-chevron"/></svg>
           </button>
+          <div class="voice-group" title="Speak to Aura in any language (powered by Sarvam AI)">
+            <button class="tool voice-btn" type="button" id="btn-voice" aria-label="Voice input">
+              <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-mic"/></svg>
+              <span id="voice-btn-label">Voice</span>
+            </button>
+            <select class="voice-lang-select" id="sel-voice-lang" aria-label="Voice language">
+              <option value="auto">Auto-detect</option>
+              <option value="hi-IN">हिन्दी (Hindi)</option>
+              <option value="en-IN">English</option>
+              <option value="bn-IN">বাংলা (Bengali)</option>
+              <option value="ta-IN">தமிழ் (Tamil)</option>
+              <option value="te-IN">తెలుగు (Telugu)</option>
+              <option value="kn-IN">ಕನ್ನಡ (Kannada)</option>
+              <option value="ml-IN">മലയാളം (Malayalam)</option>
+              <option value="mr-IN">मराठी (Marathi)</option>
+              <option value="gu-IN">ગુજરાતી (Gujarati)</option>
+              <option value="pa-IN">ਪੰਜਾਬੀ (Punjabi)</option>
+              <option value="od-IN">ଓଡ଼ିଆ (Odia)</option>
+            </select>
+          </div>
           <span class="grow"></span>
           <label class="switch" title="Toggle Sentinel-Z Decision Gateway">
             <input type="checkbox" id="tgl-defense" checked>
@@ -146,6 +169,10 @@
           <button class="example" data-q="Go to amazon and find me a green t shirt and add it to cart">
             <span>Find a green t-shirt on Amazon & add to cart</span>
             <svg class="ic" width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-cart"/></svg>
+          </button>
+          <button class="example" data-q="Call my friend and tell them I'll be there in 10 minutes">
+            <span>Call my friend via CALL-E &amp; deliver a message</span>
+            <svg class="ic" width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-phone"/></svg>
           </button>
         </div>
       </div>
@@ -258,6 +285,31 @@
       <div class="name">Attacker Exfiltration Sink</div>
       <div class="meta" id="setting-sink">http://127.0.0.1:8899</div>
     </div>
+    <div class="item-card">
+      <div class="name" style="display:flex;align-items:center;justify-content:space-between;">
+        <span>Sarvam AI Multilingual Voice</span>
+        <span class="tag ALLOW" id="sarvam-status-tag" style="font-size:10px;padding:2px 7px;">Checking…</span>
+      </div>
+      <div class="meta" style="margin-bottom:8px;">Powers speech-to-text, translation &amp; natural Indian-language speech output.</div>
+      <div style="display:flex;gap:8px;">
+        <input type="password" id="inp-sarvam-key" placeholder="Enter SARVAM_API_KEY (or set in .env)" style="flex:1;height:32px;padding:0 10px;border-radius:8px;border:1px solid var(--border-2);background:var(--surface-2);color:var(--ink);font-size:12.5px;outline:none;">
+        <button class="btn primary" id="btn-save-sarvam" type="button" style="height:32px;font-size:12px;">Save Key</button>
+      </div>
+    </div>
+    <div class="item-card">
+      <div class="name" style="display:flex;align-items:center;justify-content:space-between;">
+        <span>CALL-E Agentic Phone Calling (heycall-e.com)</span>
+        <span class="tag ALLOW" id="calle-status-tag" style="font-size:10px;padding:2px 7px;">Checking…</span>
+      </div>
+      <div class="meta" style="margin-bottom:8px;">Places outbound phone calls when you ask Aura to call a friend or phone number.</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <input type="password" id="inp-calle-key" placeholder="Enter CALLE_API_KEY (from heycall-e.com)" style="height:32px;padding:0 10px;border-radius:8px;border:1px solid var(--border-2);background:var(--surface-2);color:var(--ink);font-size:12.5px;outline:none;">
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="inp-calle-phone" placeholder="Default friend phone (E.164 e.g. +919876543210)" style="flex:1;height:32px;padding:0 10px;border-radius:8px;border:1px solid var(--border-2);background:var(--surface-2);color:var(--ink);font-size:12.5px;outline:none;">
+          <button class="btn primary" id="btn-save-calle" type="button" style="height:32px;font-size:12px;">Save CALL-E</button>
+        </div>
+      </div>
+    </div>
     <div style="display:flex;justify-content:flex-end;margin-top:8px;">
       <button class="btn primary" id="btn-close-settings" type="button">Done</button>
     </div>
@@ -274,7 +326,7 @@
 <!-- Scripts -->
 <script src="/static/vendor/three.min.js"></script>
 <script src="/static/vendor/motion.min.js"></script>
-<script src="/static/orb.js"></script>
-<script src="/static/app.js"></script>
+<script src="/static/orb.js?v=4"></script>
+<script src="/static/app.js?v=4"></script>
 </body>
 </html>

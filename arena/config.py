@@ -47,6 +47,16 @@ GEMINI_API_KEY: str = _env("GEMINI_API_KEY", "") or _env("GOOGLE_API_KEY", "")
 GEMINI_BASE_URL: str = _env("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/")
 GEMINI_MODEL: str = _env("SENTINELZ_GEMINI_MODEL", "gemini-3.5-flash-lite")
 
+#: Sarvam AI Voice configuration (multilingual STT, Translation & TTS)
+SARVAM_API_KEY: str = _env("SARVAM_API_KEY", "")
+SARVAM_BASE_URL: str = _env("SARVAM_BASE_URL", "https://api.sarvam.ai")
+SARVAM_SPEAKER: str = _env("SARVAM_SPEAKER", "shubh")
+
+#: CALL-E Agentic Phone Calling configuration (https://api.heycall-e.com)
+CALLE_API_KEY: str = _env("CALLE_API_KEY", "") or _env("CALL_E_API_KEY", "")
+CALLE_BASE_URL: str = _env("CALLE_BASE_URL", "https://api.heycall-e.com")
+CALLE_DEFAULT_PHONE: str = _env("CALLE_DEFAULT_PHONE", "") or _env("CALL_E_DEFAULT_PHONE", "")
+
 ATTACKER_HOST: str = _env("SENTINELZ_ATTACKER_HOST", "127.0.0.1")
 ATTACKER_PORT: int = _int_env("SENTINELZ_ATTACKER_PORT", 8899)
 ATTACKER_URL: str = f"http://{ATTACKER_HOST}:{ATTACKER_PORT}"

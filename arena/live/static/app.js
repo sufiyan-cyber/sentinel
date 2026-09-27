@@ -32,6 +32,7 @@ const TOOL = {
   browser_add_to_cart: { icon: "i-cart",   verb: "Adding product to cart on" },
   browser_click:       { icon: "i-spark",  verb: "Interacting with page in browser" },
   autonomous_browse:   { icon: "i-spark",  verb: "Autonomous AI Web Agent" },
+  place_phone_call:    { icon: "i-phone",  verb: "Placing phone call via CALL-E" },
 };
 
 function label(tool, args) {
@@ -45,6 +46,11 @@ function label(tool, args) {
   if (tool === "autonomous_browse") {
     const q = args.task || "Browsing web...";
     return `Autonomous AI Browser: ${q.length > 55 ? q.slice(0, 55) + "…" : q}`;
+  }
+  if (tool === "place_phone_call") {
+    const who = args.recipient_name || args.phone || "recipient";
+    const num = args.phone && args.phone !== "default" ? ` (${args.phone})` : "";
+    return `Dispatching CALL-E phone call to ${who}${num}`;
   }
   if (tool === "search_web" || tool === "search_emails") return `${t.verb} for “${args.query || ""}”`;
   if (tool === "send_email") return `${t.verb} to ${args.to || ""}`;
@@ -351,6 +357,95 @@ $("btn-nav-settings").onclick = () => {
   backdrop.classList.add("is-open");
 };
 
+function updateSarvamBadge(configured) {
+  const tag = $("sarvam-status-tag");
+  if (!tag) return;
+  if (configured) {
+    tag.textContent = "ACTIVE";
+    tag.className = "tag ALLOW";
+  } else {
+    tag.textContent = "KEY NEEDED";
+    tag.className = "tag MONITOR";
+  }
+}
+
+if ($("btn-save-sarvam")) {
+  $("btn-save-sarvam").onclick = async () => {
+    const key = ($("inp-sarvam-key")?.value || "").trim();
+    if (!key) {
+      showToast("Please enter a valid SARVAM_API_KEY");
+      return;
+    }
+    try {
+      const res = await fetch("/api/voice/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ api_key: key }),
+      });
+      const data = await res.json();
+      if (data.ok && data.configured) {
+        updateSarvamBadge(true);
+        $("inp-sarvam-key").value = "";
+        $("inp-sarvam-key").placeholder = "SARVAM_API_KEY configured ✓";
+        showToast("Sarvam AI Voice key saved!");
+      } else {
+        showToast("Could not configure Sarvam API key");
+      }
+    } catch (err) {
+      showToast("Failed to save Sarvam API key");
+    }
+  };
+}
+
+function updateCalleBadge(configured, defaultPhone = "") {
+  const tag = $("calle-status-tag");
+  if (!tag) return;
+  if (configured) {
+    tag.textContent = "ACTIVE";
+    tag.className = "tag ALLOW";
+    if ($("inp-calle-key")) {
+      $("inp-calle-key").placeholder = "CALLE_API_KEY configured ✓";
+    }
+  } else {
+    tag.textContent = "KEY NEEDED";
+    tag.className = "tag MONITOR";
+  }
+  if (defaultPhone && $("inp-calle-phone") && !$("inp-calle-phone").value) {
+    $("inp-calle-phone").value = defaultPhone;
+  }
+}
+
+if ($("btn-save-calle")) {
+  $("btn-save-calle").onclick = async () => {
+    const key = ($("inp-calle-key")?.value || "").trim();
+    const phone = ($("inp-calle-phone")?.value || "").trim();
+    if (!key && !phone) {
+      showToast("Please enter CALLE_API_KEY or a default friend phone number");
+      return;
+    }
+    try {
+      const res = await fetch("/api/calle/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ api_key: key, default_phone: phone }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        updateCalleBadge(data.configured, data.default_phone || phone);
+        if (key && $("inp-calle-key")) {
+          $("inp-calle-key").value = "";
+          $("inp-calle-key").placeholder = "CALLE_API_KEY configured ✓";
+        }
+        showToast("CALL-E configuration saved!");
+      } else {
+        showToast("Could not save CALL-E configuration");
+      }
+    } catch (err) {
+      showToast("Failed to save CALL-E configuration");
+    }
+  };
+}
+
 // Home Button
 $("btn-nav-home").onclick = () => {
   closeAllPanels();
@@ -361,7 +456,7 @@ $("btn-nav-home").onclick = () => {
 // ------------------------------------------------------------- Composer & Input
 // Clicking anywhere on composer focuses the textarea
 composer.onclick = (e) => {
-  if (!["BUTTON", "INPUT", "LABEL", "SVG", "PATH"].includes(e.target.tagName)) {
+  if (!["BUTTON", "INPUT", "LABEL", "SELECT", "OPTION", "SVG", "PATH"].includes(e.target.tagName)) {
     input.focus();
   }
 };
@@ -386,13 +481,267 @@ composer.addEventListener("submit", (e) => {
   send(input.value);
 });
 
+// ------------------------------------------------------------- Sarvam Voice Audio & Recording
+let activeAudio = null;
+
+function playVoiceAudio(audioB64, fallbackText = "", langCode = "en-IN") {
+  try {
+    if (activeAudio) {
+      activeAudio.pause();
+      activeAudio = null;
+    }
+    if (audioB64) {
+      const audio = new Audio(`data:audio/wav;base64,${audioB64}`);
+      activeAudio = audio;
+      audio.play().catch((err) => {
+        console.warn("Audio playback blocked or failed:", err);
+      });
+      return;
+    }
+    if (fallbackText && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+      const utter = new SpeechSynthesisUtterance(fallbackText);
+      utter.lang = langCode || "en-IN";
+      window.speechSynthesis.speak(utter);
+    }
+  } catch (err) {
+    console.warn("TTS playback error:", err);
+  }
+}
+
+let isRecordingVoice = false;
+let audioCtx = null;
+let mediaStream = null;
+let scriptNode = null;
+let recordedBuffers = [];
+let recordingSampleRate = 16000;
+
+function mergeBuffers(buffers) {
+  let totalLen = 0;
+  for (const b of buffers) totalLen += b.length;
+  const out = new Float32Array(totalLen);
+  let offset = 0;
+  for (const b of buffers) {
+    out.set(b, offset);
+    offset += b.length;
+  }
+  return out;
+}
+
+function downsampleBuffer(buffer, inputRate, outputRate) {
+  if (outputRate === inputRate) return buffer;
+  const ratio = inputRate / outputRate;
+  const newLen = Math.round(buffer.length / ratio);
+  const result = new Float32Array(newLen);
+  let offsetResult = 0;
+  let offsetBuffer = 0;
+  while (offsetResult < result.length) {
+    const nextOffsetBuffer = Math.round((offsetResult + 1) * ratio);
+    let accum = 0;
+    let count = 0;
+    for (let i = offsetBuffer; i < nextOffsetBuffer && i < buffer.length; i++) {
+      accum += buffer[i];
+      count++;
+    }
+    result[offsetResult] = count > 0 ? accum / count : 0;
+    offsetResult++;
+    offsetBuffer = nextOffsetBuffer;
+  }
+  return result;
+}
+
+function encodeWavBase64(samples, sampleRate = 16000) {
+  const buffer = new ArrayBuffer(44 + samples.length * 2);
+  const view = new DataView(buffer);
+  const writeStr = (offset, str) => {
+    for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+  };
+  writeStr(0, "RIFF");
+  view.setUint32(4, 36 + samples.length * 2, true);
+  writeStr(8, "WAVE");
+  writeStr(12, "fmt ");
+  view.setUint32(16, 16, true); // PCM chunk size
+  view.setUint16(20, 1, true);  // PCM format
+  view.setUint16(22, 1, true);  // Mono
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);  // Block align
+  view.setUint16(34, 16, true); // 16-bit
+  writeStr(36, "data");
+  view.setUint32(40, samples.length * 2, true);
+
+  let offset = 44;
+  for (let i = 0; i < samples.length; i++, offset += 2) {
+    const s = Math.max(-1, Math.min(1, samples[i]));
+    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+  }
+
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+let recordingTimer = null;
+let recordingSec = 0;
+
+async function startVoiceRecording() {
+  if (busy) {
+    showToast("Aura is currently busy with a task");
+    return;
+  }
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    audioCtx = new AudioContextClass();
+    if (audioCtx.state === "suspended") {
+      await audioCtx.resume();
+    }
+    recordingSampleRate = audioCtx.sampleRate || 44100;
+    recordedBuffers = [];
+
+    const sourceNode = audioCtx.createMediaStreamSource(mediaStream);
+    scriptNode = audioCtx.createScriptProcessor(4096, 1, 1);
+    scriptNode.onaudioprocess = (e) => {
+      if (!isRecordingVoice) return;
+      const chan = e.inputBuffer.getChannelData(0);
+      recordedBuffers.push(new Float32Array(chan));
+    };
+    sourceNode.connect(scriptNode);
+    scriptNode.connect(audioCtx.destination);
+
+    isRecordingVoice = true;
+    recordingSec = 0;
+    const btn = $("btn-voice");
+    const lbl = $("voice-btn-label");
+    if (btn) btn.classList.add("recording");
+    if (lbl) lbl.textContent = "Stop & Send (0s)";
+    if (recordingTimer) clearInterval(recordingTimer);
+    recordingTimer = setInterval(() => {
+      recordingSec += 1;
+      if (lbl && isRecordingVoice) {
+        lbl.textContent = `Stop & Send (${recordingSec}s)`;
+      }
+    }, 1000);
+    showToast("🎙️ Listening… Speak in any language, then click Stop & Send");
+  } catch (err) {
+    console.error("Microphone error:", err);
+    showToast("Microphone permission denied or unavailable");
+  }
+}
+
+async function stopVoiceRecording() {
+  if (!isRecordingVoice) return;
+  isRecordingVoice = false;
+  if (recordingTimer) {
+    clearInterval(recordingTimer);
+    recordingTimer = null;
+  }
+  const btn = $("btn-voice");
+  const lbl = $("voice-btn-label");
+  if (btn) {
+    btn.classList.remove("recording");
+    btn.classList.add("processing");
+  }
+  if (lbl) lbl.textContent = "Transcribing…";
+
+  try {
+    if (scriptNode) scriptNode.disconnect();
+    if (mediaStream) mediaStream.getTracks().forEach((t) => t.stop());
+    if (audioCtx) await audioCtx.close();
+  } catch (_) {}
+
+  const flat = mergeBuffers(recordedBuffers);
+  recordedBuffers = [];
+  if (flat.length < recordingSampleRate * 0.25) {
+    if (btn) btn.classList.remove("processing");
+    if (lbl) lbl.textContent = "Voice";
+    showToast("Recording too short — please speak a little longer");
+    return;
+  }
+
+  const downsampled = downsampleBuffer(flat, recordingSampleRate, 16000);
+  const wavB64 = encodeWavBase64(downsampled, 16000);
+  const langHint = $("sel-voice-lang")?.value || "auto";
+
+  try {
+    const res = await fetch("/api/voice/stt", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ audio_b64: wavB64, language_code: langHint }),
+    });
+    const data = await res.json();
+    if (btn) btn.classList.remove("processing");
+    if (lbl) lbl.textContent = "Voice";
+
+    if (!data.ok) {
+      showToast(data.error || "Voice transcription failed");
+      if ((data.error || "").includes("SARVAM_API_KEY")) {
+        $("modal-settings").classList.add("is-open");
+        backdrop.classList.add("is-open");
+        $("inp-sarvam-key")?.focus();
+      }
+      return;
+    }
+
+    // 1. Immediately play the localized "Working on it..." acknowledgment in the user's language
+    playVoiceAudio(data.working_audio_b64, data.working_text, data.language_code);
+
+    // 2. Dispatch the voice turn (shows user's native transcript + executes English task)
+    await send(data.english_text, {
+      displayText: data.transcript,
+      voiceLang: data.language_code,
+      languageLabel: data.language_label,
+      workingText: data.working_text,
+      workingAudioB64: data.working_audio_b64,
+    });
+  } catch (err) {
+    if (btn) btn.classList.remove("processing");
+    if (lbl) lbl.textContent = "Voice";
+    showToast("Error communicating with Sarvam voice service");
+  }
+}
+
+if ($("btn-voice")) {
+  $("btn-voice").onclick = () => {
+    if (isRecordingVoice) {
+      stopVoiceRecording();
+    } else {
+      startVoiceRecording();
+    }
+  };
+}
+
 // ------------------------------------------------------------- Chat & Execution
-function addBubble(role, text) {
+function addBubble(role, text, voiceMeta = null) {
   const turn = document.createElement("div");
   turn.className = `turn ${role}`;
   const bubble = document.createElement("div");
   bubble.className = "bubble";
-  bubble.textContent = text;
+
+  const mainText = document.createElement("div");
+  mainText.textContent = text;
+  bubble.appendChild(mainText);
+
+  if (voiceMeta && voiceMeta.subText && voiceMeta.subText.trim() !== text.trim()) {
+    const sub = document.createElement("div");
+    sub.className = "voice-sub";
+    sub.textContent = voiceMeta.subText;
+    bubble.appendChild(sub);
+  }
+
+  if (voiceMeta && (voiceMeta.audioB64 || voiceMeta.speakText)) {
+    const replay = document.createElement("button");
+    replay.type = "button";
+    replay.className = "voice-replay-btn";
+    replay.innerHTML = `${icon("i-volume", "", 13)} <span>${voiceMeta.label || "Listen"}</span>`;
+    replay.onclick = () => playVoiceAudio(voiceMeta.audioB64, voiceMeta.speakText || text, voiceMeta.langCode);
+    bubble.appendChild(replay);
+  }
+
   turn.appendChild(bubble);
   thread.appendChild(turn);
   enter(turn);
@@ -435,10 +784,15 @@ function finishStep(step, ok) {
   }
 }
 
-async function send(text) {
+async function send(text, voiceOpts = null) {
   if (busy || !text.trim()) return;
   clearHero();
-  addBubble("me", text);
+  const shownText = voiceOpts?.displayText || text;
+  const subText =
+    voiceOpts && voiceOpts.displayText && voiceOpts.displayText.trim() !== text.trim()
+      ? `🌐 ${voiceOpts.languageLabel || voiceOpts.voiceLang}: “${text}”`
+      : "";
+  addBubble("me", shownText, subText ? { subText } : null);
   input.value = "";
   input.style.height = "auto";
   busy = true;
@@ -446,11 +800,20 @@ async function send(text) {
   window.auraOrb?.busy(true);
   trace = null;
 
+  if (voiceOpts?.workingText) {
+    const ackStep = addStep(`🗣️ ${voiceOpts.workingText} (${voiceOpts.languageLabel || voiceOpts.voiceLang})`);
+    finishStep(ackStep, true);
+  }
+
   try {
     await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({
+        text,
+        display_text: shownText,
+        voice_lang: voiceOpts?.voiceLang || "",
+      }),
     });
   } catch (err) {
     addBubble("ai", "Network error communicating with the agent server.");
@@ -493,6 +856,12 @@ function setBackend(d) {
   if (d.attacker_url) {
     const s = $("setting-sink");
     if (s) s.textContent = d.attacker_url;
+  }
+  if (d.sarvam_configured !== undefined) {
+    updateSarvamBadge(d.sarvam_configured);
+  }
+  if (d.calle_configured !== undefined) {
+    updateCalleBadge(d.calle_configured, d.calle_default_phone || "");
   }
 }
 
@@ -612,12 +981,47 @@ source.addEventListener("browser_open", (e) => {
   stick();
 });
 
+source.addEventListener("calle_call", (e) => {
+  const d = JSON.parse(e.data);
+  clearHero();
+  const card = document.createElement("div");
+  card.className = "live-browser-card";
+  card.innerHTML = `
+    <div class="lbc-top">
+      <span class="lbc-tag cart">📞 CALL-E PHONE CALL DISPATCHED</span>
+      <span class="lbc-site">heycall-e.com • ${(d.status || "PENDING").toUpperCase()}</span>
+    </div>
+    <div class="lbc-content">
+      <div class="lbc-title">Calling ${d.recipient_name || "Friend"} (${d.phone || ""})</div>
+      <div class="meta" style="margin-top:4px;font-size:13px;color:var(--ink-2);">Message: “${d.message || ""}”</div>
+      <div class="meta" style="margin-top:4px;font-size:11.5px;color:var(--muted);">Call ID: <code>${d.call_id || "dispatched"}</code></div>
+    </div>
+  `;
+  thread.appendChild(card);
+  enter(card);
+  stick();
+});
+
 source.addEventListener("assistant", (e) => {
   clearHero();
   if (trace && trace.children.length === 0) {
     trace.remove();
   }
-  addBubble("ai", JSON.parse(e.data).text);
+  const d = JSON.parse(e.data);
+  if (d.voice && d.voice.localized_text) {
+    const v = d.voice;
+    const isDiff = v.localized_text.trim() !== (d.text || "").trim();
+    addBubble("ai", v.localized_text, {
+      subText: isDiff ? `English: ${d.text}` : "",
+      audioB64: v.audio_b64 || "",
+      speakText: v.localized_text,
+      langCode: v.language_code || "en-IN",
+      label: `Listen (${v.language_label || v.language_code})`,
+    });
+    playVoiceAudio(v.audio_b64, v.localized_text, v.language_code);
+  } else {
+    addBubble("ai", d.text);
+  }
   trace = null;
 });
 

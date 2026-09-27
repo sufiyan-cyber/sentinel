@@ -25,6 +25,8 @@ from fastapi.staticfiles import StaticFiles
 
 from arena import config
 from arena.live.agent import LiveAgent
+from arena.live.calle import CALLE_SERVICE
+from arena.live.voice import VOICE_SERVICE
 from arena.live.workspace import Workspace
 from sentinelz.broker.capability import CapabilityBroker
 from sentinelz.evidence.canonical import dumps_str
@@ -97,7 +99,7 @@ BACKEND = config.LLM_BACKEND
 MODEL: str | None = None
 
 
-def _run_turn(text: str) -> None:
+def _run_turn(text: str, voice_lang: str | None = None) -> None:
     """Drive one turn on a worker thread, mirroring every event to the UI."""
     state = STATE
     if state.busy:
@@ -117,7 +119,22 @@ def _run_turn(text: str) -> None:
         for event, payload in agent.run_turn(text):
             if event == "decision":
                 state.decisions.append(payload)
+            if event == "assistant" and voice_lang:
+                try:
+                    voice_out = VOICE_SERVICE.prepare_voice_completion(
+                        str(payload.get("text") or ""), voice_lang
+                    )
+                    payload = {**payload, "voice": voice_out}
+                except Exception:
+                    pass
             state.emit(event, payload)
+            if (
+                event == "tool_result"
+                and payload.get("tool") == "place_phone_call"
+                and not payload.get("refused")
+                and CALLE_SERVICE.latest_call
+            ):
+                state.emit("calle_call", CALLE_SERVICE.latest_call)
             if event == "tool_result" and payload.get("tool") in (
                 "browser_add_to_cart", "browser_search", "browse_website", "autonomous_browse"
             ):
@@ -154,11 +171,11 @@ def build_app() -> FastAPI:
 
     @app.get("/")
     async def index() -> FileResponse:
-        return FileResponse(STATIC_DIR / "index.html")
+        return FileResponse(STATIC_DIR / "index.html", headers={"Cache-Control": "no-store"})
 
     @app.get("/dashboard")
     async def dashboard() -> FileResponse:
-        return FileResponse(STATIC_DIR / "dashboard.html")
+        return FileResponse(STATIC_DIR / "dashboard.html", headers={"Cache-Control": "no-store"})
 
     @app.get("/events")
     async def events() -> StreamingResponse:
@@ -194,6 +211,9 @@ def build_app() -> FastAPI:
                 "emails": len(STATE.workspace.emails),
                 "decisions": STATE.decisions[-50:],
                 "attacker_url": config.ATTACKER_URL,
+                "sarvam_configured": VOICE_SERVICE.configured,
+                "calle_configured": CALLE_SERVICE.configured,
+                "calle_default_phone": CALLE_SERVICE.default_phone,
             }
         )
 
@@ -202,9 +222,57 @@ def build_app() -> FastAPI:
         text = str(payload.get("text", "")).strip()
         if not text:
             return JSONResponse({"ok": False, "error": "empty message"}, status_code=400)
-        STATE.emit("user", {"text": text})
-        threading.Thread(target=_run_turn, args=(text,), daemon=True).start()
+        voice_lang = str(payload.get("voice_lang") or "").strip() or None
+        display_text = str(payload.get("display_text") or text).strip()
+        STATE.emit("user", {"text": display_text, "voice_lang": voice_lang})
+        threading.Thread(target=_run_turn, args=(text, voice_lang), daemon=True).start()
         return JSONResponse({"ok": True})
+
+    @app.post("/api/voice/stt")
+    async def voice_stt(payload: dict[str, Any]) -> JSONResponse:
+        audio_b64 = str(payload.get("audio_b64") or "").strip()
+        language_hint = str(payload.get("language_code") or "auto").strip()
+        if not audio_b64:
+            return JSONResponse({"ok": False, "error": "empty audio"}, status_code=400)
+        result = VOICE_SERVICE.speech_to_text(audio_b64, language_hint=language_hint)
+        status_code = 200 if result.get("ok") else 400
+        return JSONResponse(result, status_code=status_code)
+
+    @app.post("/api/voice/tts")
+    async def voice_tts(payload: dict[str, Any]) -> JSONResponse:
+        text = str(payload.get("text") or "").strip()
+        language_code = str(payload.get("language_code") or "en-IN").strip()
+        if not text:
+            return JSONResponse({"ok": False, "error": "empty text"}, status_code=400)
+        result = VOICE_SERVICE.prepare_voice_completion(text, language_code)
+        return JSONResponse({"ok": True, **result})
+
+    @app.post("/api/voice/config")
+    async def voice_config(payload: dict[str, Any]) -> JSONResponse:
+        key = str(payload.get("api_key") or payload.get("sarvam_api_key") or "").strip()
+        if key:
+            VOICE_SERVICE.set_api_key(key)
+        return JSONResponse(
+            {
+                "ok": True,
+                "configured": VOICE_SERVICE.configured,
+                "sarvam_configured": VOICE_SERVICE.configured,
+            }
+        )
+
+    @app.post("/api/calle/config")
+    async def calle_config(payload: dict[str, Any]) -> JSONResponse:
+        key = str(payload.get("api_key") or payload.get("calle_api_key") or "").strip()
+        phone = str(payload.get("default_phone") or payload.get("calle_default_phone") or "").strip()
+        CALLE_SERVICE.set_config(api_key=key or None, default_phone=phone or None)
+        return JSONResponse(
+            {
+                "ok": True,
+                "configured": CALLE_SERVICE.configured,
+                "calle_configured": CALLE_SERVICE.configured,
+                "default_phone": CALLE_SERVICE.default_phone,
+            }
+        )
 
     @app.post("/api/upload")
     async def upload(payload: dict[str, Any]) -> JSONResponse:
