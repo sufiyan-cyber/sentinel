@@ -2,8 +2,9 @@
 
 Read this file at the start of every session, before touching any code.
 
-Project docs live in `docs/PRD.md` (the build spec — work through its milestones
-in order) and `docs/PLAN.md` (background and rationale only).
+Project docs live in `docs/Sentinel-Z_Arena_PRD.md` (the build spec — work through
+its milestones in order) and `docs/Sentinel-Z_Arena_Plan.md` (background and
+rationale only). The live-demo upgrade is specified in `docs/DEMO_UPGRADE_PLAN.md`.
 
 ## Never
 

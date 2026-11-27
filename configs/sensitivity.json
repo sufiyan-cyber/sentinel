@@ -55,6 +55,12 @@
     "update_user_info": 2,
     "update_password": 3,
 
+    "shop_search": 0,
+    "shop_get_product": 0,
+    "shop_add_to_cart": 1,
+    "get_wallet_balance": 2,
+    "shop_checkout": 2,
+
     "send_to_external": 3
   },
 

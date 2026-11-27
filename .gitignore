@@ -11,12 +11,17 @@ __pycache__/
 build/
 dist/
 
-# Secrets and environment configurations (AGENTS.md invariant)
+# Secrets and environment configuration (AGENTS.md invariant).
+# Only the template is ever committed.
 .env
 .env.*
 !.env.example
 *.pem
 *.key
+*.p12
+*.pfx
+secrets/
+.data/
 
 # Experiment runs, data, browser profiles and logs (AGENTS.md invariant)
 runs/
@@ -29,15 +34,36 @@ trace.zip
 .mypy_cache/
 .ruff_cache/
 .coverage
+htmlcov/
+.tox/
 .hf_cache/
+.ipynb_checkpoints/
+
+# LaTeX build output
+*.aux
+*.out
+*.toc
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+
+# Browser automation: profiles, downloads, traces
+.playwright/
+playwright-report/
+browser-use-user-data-dir-*/
+browser-use-downloads-*/
+*.har
+
+# AI coding assistant state (local, per developer)
+.claude/
+.cursor/
+.aider*
 
 # OS and editor artifacts
 .DS_Store
 Thumbs.db
+desktop.ini
 .idea/
 .vscode/
 *.swp
-
-# Playwright & browser automation temp dirs
-.playwright/
-browser-use-user-data-dir-*/
+*~

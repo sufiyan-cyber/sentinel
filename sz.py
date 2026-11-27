@@ -99,13 +99,17 @@ def target_install() -> int:
         code = run([sys.executable, "-m", "venv", ".venv"])
         if code:
             return code
-    code = run([PYTHON, "-m", "pip", "install", "--upgrade", "pip"])
+    # Always the venv's interpreter, resolved AFTER the venv exists. The
+    # module-level PYTHON was computed at import time, when a fresh clone has
+    # no .venv yet — using it here would install into the global Python.
+    python = str(VENV_PYTHON)
+    code = run([python, "-m", "pip", "install", "--upgrade", "pip"])
     if code:
         return code
     role = os.environ.get("SENTINELZ_ROLE", "victim").strip().lower()
-    extra = "attacker" if role == "attacker" else "victim"
-    print(f"\ninstalling extras for role={extra}")
-    return run([PYTHON, "-m", "pip", "install", "-e", f".[{extra},dev]"])
+    extras = "attacker,dev" if role == "attacker" else "victim,live,dev"
+    print(f"installing extras [{extras}]")
+    return run([python, "-m", "pip", "install", "-e", f".[{extras}]"])
 
 
 def target_check() -> int:

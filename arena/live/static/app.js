@@ -15,14 +15,9 @@ const canAnimate = Boolean(animate) && !reduced;
 let trace = null;
 let busy = false;
 let currentBackend = "nvidia";
-let currentModel = "meta/llama-3.2-11b-vision-instruct";
+let currentModel = "";
 let sessionHistory = [];
 
-const initPill = $("pill-backend");
-if (initPill && initPill.textContent.trim() === "connecting") {
-  initPill.textContent = "NVIDIA (Llama-3.2-11B)";
-  initPill.className = "pill ok";
-}
 
 const TOOL = {
   list_files:          { icon: "i-folder", verb: "Listing workspace documents" },
@@ -39,6 +34,13 @@ const TOOL = {
   browser_click:       { icon: "i-spark",  verb: "Interacting with page in browser" },
   autonomous_browse:   { icon: "i-spark",  verb: "Autonomous AI Web Agent" },
   place_phone_call:    { icon: "i-phone",  verb: "Placing phone call via CALL-E" },
+  browse_movie_tickets:{ icon: "i-ticket", verb: "Checking shows on BookMyShow" },
+  browse_flights:      { icon: "i-plane",  verb: "Searching flights on MakeMyTrip" },
+  shop_search:         { icon: "i-search", verb: "Searching SparrowMart" },
+  shop_get_product:    { icon: "i-file",   verb: "Reading the product page" },
+  shop_add_to_cart:    { icon: "i-cart",   verb: "Adding to cart" },
+  get_wallet_balance:  { icon: "i-check",  verb: "Checking wallet balance" },
+  shop_checkout:       { icon: "i-cart",   verb: "Paying from wallet" },
 };
 
 function label(tool, args) {
@@ -58,6 +60,11 @@ function label(tool, args) {
     const num = args.phone && args.phone !== "default" ? ` (${args.phone})` : "";
     return `Dispatching CALL-E phone call to ${who}${num}`;
   }
+  if (tool === "browse_movie_tickets") return `${args.movie ? `Finding “${args.movie}”` : "Finding a movie"} in ${args.city || "your city"} on BookMyShow (live browser)`;
+  if (tool === "browse_flights") return `Searching flights ${args.origin || ""} → ${args.destination || ""}${args.date ? `, ${args.date}` : ""} on MakeMyTrip (live browser)`;
+  if (tool === "shop_search") return `${t.verb} for “${args.query || ""}”`;
+  if (tool === "shop_get_product" || tool === "shop_add_to_cart") return `${t.verb} ${args.sku || ""}`.trim();
+  if (tool === "shop_checkout") return `${t.verb}${args.amount_inr != null ? ` — ₹${Number(args.amount_inr).toLocaleString("en-IN")}` : ""}`;
   if (tool === "search_web" || tool === "search_emails") return `${t.verb} for “${args.query || ""}”`;
   if (tool === "send_email") return `${t.verb} to ${args.to || ""}`;
   if (tool === "send_to_external") return `${t.verb} to ${args.url || ""}`;
@@ -116,7 +123,7 @@ function initTheme() {
 function updateThemeIcon(theme) {
   const btn = $("btn-theme");
   if (!btn) return;
-  btn.innerHTML = theme === "dark" ? icon("i-sun", "", 20) : icon("i-moon", "", 20);
+  btn.innerHTML = (theme === "dark" ? icon("i-sun", "", 22) : icon("i-moon", "", 22)) + `<span>${theme === "dark" ? "Light" : "Dark"}</span>`;
   btn.setAttribute("data-tip", theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode");
 }
 
@@ -729,7 +736,16 @@ function addBubble(role, text, voiceMeta = null) {
   bubble.className = "bubble";
 
   const mainText = document.createElement("div");
-  mainText.textContent = text;
+  if (role === "ai") {
+    // Escape first, then allow only bold and inline code from the model.
+    const safe = String(text).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    mainText.innerHTML = safe
+      .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/`([^`\n]+)`/g, "<code>$1</code>");
+    mainText.style.whiteSpace = "pre-wrap";
+  } else {
+    mainText.textContent = text;
+  }
   bubble.appendChild(mainText);
 
   if (voiceMeta && voiceMeta.subText && voiceMeta.subText.trim() !== text.trim()) {
@@ -838,8 +854,11 @@ function setBackend(d) {
   currentModel = d.model || "";
   const b = $("pill-backend");
   if (b) {
-    if (d.backend === "nvidia") {
-      b.textContent = `NVIDIA (Llama-3.2-11B)`;
+    if (d.backend_ok === false) {
+      b.textContent = `${d.backend} unavailable (${d.backend_error || "no answer"})`;
+      b.className = "pill danger";
+    } else if (d.backend === "nvidia") {
+      b.textContent = `NVIDIA (${d.model || "NIM"})`;
       b.className = "pill ok";
     } else if (d.backend === "gemini") {
       b.textContent = `Gemini (${d.model || "gemini-3.6-flash"})`;
@@ -851,8 +870,8 @@ function setBackend(d) {
       b.textContent = "Scripted (Offline)";
       b.className = "pill warn";
     } else {
-      b.textContent = `NVIDIA (Llama-3.2-11B)`;
-      b.className = "pill ok";
+      b.textContent = d.backend || "connecting";
+      b.className = "pill";
     }
   }
 
@@ -921,6 +940,7 @@ source.addEventListener("browser_step", (e) => {
 
 source.addEventListener("stepup_request", (e) => {
   const d = JSON.parse(e.data);
+  if (d.kind === "mandate") return; // the over-budget card in wallet.js handles it
   clearHero();
   const box = document.createElement("div");
   box.className = "confirm";

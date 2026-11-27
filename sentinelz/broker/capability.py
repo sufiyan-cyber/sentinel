@@ -20,6 +20,7 @@ DENY_REVOKED = "revoked"
 DENY_OUT_OF_SCOPE = "out_of_scope"
 DENY_RESTRICTED_TOOL = "restricted_tool"
 DENY_RESTRICTED_TARGET = "restricted_target"
+DENY_OVER_SPEND_LIMIT = "over_spend_limit"
 
 
 @dataclass
@@ -33,6 +34,10 @@ class Capability:
     revoked_reason: str = ""
     restrictions: dict[str, Any] = field(default_factory=dict)
     denials: list[dict[str, str]] = field(default_factory=list)
+    #: The most this token may pay in one transaction, in paise. None = no
+    #: payment authority has been scoped yet, which permits nothing to be
+    #: refused on amount alone.
+    spend_limit_paise: int | None = None
 
 
 class CapabilityBroker:
@@ -102,6 +107,38 @@ class CapabilityBroker:
             if str(pattern).lower() in lowered:
                 return DENY_RESTRICTED_TARGET
         return ""
+
+    # ------------------------------------------------------------ spend
+    def set_spend_limit(self, session_id: str, max_paise: int) -> None:
+        """Scope the token to payments of at most `max_paise` each.
+
+        The limit is the user's stated budget, so the agent cannot raise it:
+        nothing the agent calls reaches this method.
+        """
+        capability = self._by_session.get(session_id)
+        if capability is not None:
+            capability.spend_limit_paise = max(0, int(max_paise))
+
+    def spend_limit(self, session_id: str) -> int | None:
+        capability = self._by_session.get(session_id)
+        return capability.spend_limit_paise if capability else None
+
+    def check_spend(self, token: str, amount_paise: int, tool_name: str = "payment") -> bool:
+        """True when this token may pay `amount_paise`. Denials are recorded.
+
+        A dead or unknown token can pay nothing, whatever the amount.
+        """
+        capability = self._by_token.get(token)
+        if capability is None:
+            return False
+        if not capability.alive:
+            self._deny(capability, tool_name, str(amount_paise), DENY_REVOKED)
+            return False
+        limit = capability.spend_limit_paise
+        if limit is not None and int(amount_paise) > limit:
+            self._deny(capability, tool_name, str(amount_paise), DENY_OVER_SPEND_LIMIT)
+            return False
+        return True
 
     # ----------------------------------------------------------- revoke
     def revoke(self, session_id: str, reason: str = "policy") -> None:

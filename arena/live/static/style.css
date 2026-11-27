@@ -45,7 +45,7 @@
   --r-lg: 18px;
   --r-full: 9999px;
 
-  --rail: 56px;
+  --rail: 76px;
   --col: 860px;
 
   --dur: 0.2s;
@@ -130,31 +130,56 @@ svg { display: block; flex: none; }
   border-right: 1px solid var(--line);
   display: flex;
   flex-direction: column;
-  align-items: center;
-  padding: 14px 0 14px;
-  gap: 6px;
+  align-items: stretch;
+  padding: 12px 8px 12px;
+  gap: 10px;
   background: var(--surface);
   z-index: 20;
 }
 
-.rail .nav { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.rail-brand {
+  align-self: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: var(--grad);
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+  text-decoration: none;
+  box-shadow: var(--shadow-glow);
+  margin-bottom: 6px;
+}
+
+.rail .nav { display: flex; flex-direction: column; gap: 2px; }
+.rail .nav-foot { padding-top: 10px; border-top: 1px solid var(--line); }
 .rail .grow { flex: 1; }
 
 .rail-btn {
   position: relative;
-  width: 42px;
-  height: 42px;
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  padding: 9px 2px 7px;
   border: 0;
   background: none;
-  color: var(--muted);
+  color: var(--ink-3);
   cursor: pointer;
   border-radius: var(--r);
-  transition: color var(--dur) var(--ease), background var(--dur) var(--ease), transform var(--dur) var(--ease);
+  text-decoration: none;
+  font: inherit;
+  transition: color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
-.rail-btn:hover { color: var(--ink); background: var(--surface-2); transform: translateY(-1px); }
-.rail-btn:active { transform: translateY(0); }
+.rail-btn svg { display: block; }
+.rail-btn span { font-size: 10.5px; font-weight: 600; letter-spacing: 0.01em; line-height: 1; }
+.rail-btn:hover { color: var(--ink); background: var(--surface-2); }
+.rail-btn:active { background: var(--surface-hover); }
 .rail-btn.active, .rail-btn[aria-current="page"] {
   color: var(--primary);
   background: var(--primary-light);
@@ -162,33 +187,20 @@ svg { display: block; flex: none; }
 .rail-btn.active::before, .rail-btn[aria-current="page"]::before {
   content: "";
   position: absolute;
-  left: -7px;
+  left: -8px;
+  top: 50%;
   width: 3px;
-  height: 20px;
-  border-radius: var(--r-full);
+  height: 22px;
+  margin-top: -11px;
+  border-radius: 0 var(--r-full) var(--r-full) 0;
   background: var(--grad);
 }
 
-/* Tooltip on rail */
-.rail-btn::after {
-  content: attr(data-tip);
-  position: absolute;
-  left: calc(100% + 10px);
-  padding: 4px 9px;
-  background: var(--ink);
-  color: var(--surface);
-  font-size: 11px;
-  font-weight: 500;
-  white-space: nowrap;
-  border-radius: var(--r-sm);
-  pointer-events: none;
-  opacity: 0;
-  transform: translateX(-4px);
-  transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
-  z-index: 50;
-  box-shadow: var(--shadow-md);
+@media (max-width: 720px) {
+  :root { --rail: 56px; }
+  .rail { padding-left: 4px; padding-right: 4px; }
+  .rail-btn span { display: none; }
 }
-.rail-btn:hover::after { opacity: 1; transform: translateX(0); }
 
 /* ------------------------------------------------------------------ main */
 main {

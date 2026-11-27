@@ -28,6 +28,7 @@ from agentdojo.types import (
 )
 
 from arena import config
+from arena.agent.backends import BackendUnavailableError
 from sentinelz.evidence.canonical import dumps_str
 
 MAX_PARSE_RETRIES = 2
@@ -104,8 +105,20 @@ class NvidiaLLM(LocalLLM):
                 completion = self._chat_completion_no_seed(messages_)
                 output = _parse_model_output(completion)
                 return query, runtime, env, [*messages, output], extra_args
+            except openai.APIStatusError as exc:
+                # A 4xx other than rate-limiting will never succeed on retry
+                # (bad key, retired model). Say so instead of looking like a
+                # model that had nothing to do.
+                if 400 <= exc.status_code < 500 and exc.status_code != 429:
+                    raise BackendUnavailableError(
+                        f"{self.name} rejected the request (HTTP {exc.status_code})"
+                    ) from exc
+                last_error = exc
             except (InvalidModelOutputError, ValueError, openai.OpenAIError) as exc:
                 last_error = exc
+
+        if isinstance(last_error, openai.OpenAIError):
+            raise BackendUnavailableError(f"{self.name} is unreachable: {last_error}") from last_error
 
         # Out of retries. Return a plain answer so the run terminates cleanly
         note = f"[model output could not be parsed after {MAX_PARSE_RETRIES} retries: {last_error}]"

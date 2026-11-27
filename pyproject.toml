@@ -7,13 +7,16 @@ dependencies = [
     "numpy>=1.26",
     "pydantic>=2.7",
     "python-dotenv>=1.0",
+    # Verify TLS against the OS certificate store (see arena/config.py).
+    "truststore>=0.10",
 ]
 
 [project.optional-dependencies]
 # Laptop A (victim): runs the agent, the signals, the models and the UI.
 victim = [
     "agentdojo>=0.1.35",
-    "scikit-learn>=1.4",
+    # Pinned: the committed models/*.joblib were pickled with exactly this version.
+    "scikit-learn==1.9.0",
     "pandas>=2.2",
     "joblib>=1.4",
     "fastapi>=0.110",
@@ -28,6 +31,16 @@ attacker = [
     "uvicorn>=0.29",
     "rich>=13.7",
     "httpx>=0.27",
+]
+# The live assistant's visible desktop browser (Amazon/Flipkart/shop demo).
+# Imported lazily: chat, documents and payments work without it.
+live = [
+    # 0.x only: 1.0 removed the step callback and local-launch API this code uses.
+    "browser-use==0.13.14",
+    "langchain-openai==1.8.5",
+    # Seat-map reading and closing a left-open browser window.
+    "pillow>=10",
+    "psutil>=5.9",
 ]
 # Optional: the real neural injection classifier and sentence embedder.
 # Without these, sentinelz falls back to deterministic lexical scorers

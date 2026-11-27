@@ -7,15 +7,23 @@ where the interception is visible, which is exactly the situation the project
 is about.
 
     python sz.py live
+
+A `Lane` is one agent's whole world: workspace, broker, wallet, cart, evidence
+chain. Normal use has one lane, `main`. A twin run adds two more — the same
+request sent to an undefended and a defended agent side by side.
 """
 
 from __future__ import annotations
 
 import argparse
 import contextlib
-import os
+import copy
 import queue
+import sys
 import threading
+import time
+import uuid
+from collections.abc import AsyncIterator
 from typing import Any
 
 import uvicorn
@@ -24,16 +32,78 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from arena import config
-from arena.live.agent import LiveAgent
+from arena.live.agent import PROFILES, LiveAgent
 from arena.live.calle import CALLE_SERVICE
+from arena.live.payments import MockProvider, PaymentError, PaymentProvider, build_provider
+from arena.live.shop import POISON, ShopSession, build_router
+from arena.live.tools import BOOKING_TOOLS, BROWSER_TOOLS, SHOP_TOOLS
 from arena.live.voice import VOICE_SERVICE
+from arena.live.wallet import inr
 from arena.live.workspace import Workspace
 from sentinelz.broker.capability import CapabilityBroker
-from sentinelz.evidence.canonical import dumps_str
+from sentinelz.context import DecisionContext, PendingCall
+from sentinelz.evidence.canonical import dumps_str, loads
+from sentinelz.evidence.chain import DecisionChain, verify
+from sentinelz.evidence.export import write_chain
 from sentinelz.gateway import build_gateway
 
 STATIC_DIR = config.REPO_ROOT / "arena" / "live" / "static"
+DEMO_DOCS_DIR = config.REPO_ROOT / "demo_docs"
+SCENARIOS_PATH = config.REPO_ROOT / "configs" / "demo_scenarios.json"
 MAX_UPLOAD_BYTES = 512_000
+MAX_TOPUP_INR = 100_000
+MAIN = "main"
+
+
+def _payments() -> tuple[PaymentProvider, str]:
+    """The configured provider, or the mock plus the reason it was not used."""
+    try:
+        return build_provider(), ""
+    except PaymentError as exc:
+        return MockProvider(), str(exc)
+
+
+class Lane:
+    """One agent's world. Survives the agent being re-created after a revoke."""
+
+    def __init__(self, name: str, defended: bool, provider: PaymentProvider | None = None) -> None:
+        self.name = name
+        self.defended = defended
+        self.workspace = Workspace()
+        self.broker = CapabilityBroker()
+        self.shop = ShopSession(provider)
+        self.chain = DecisionChain()
+        self.chain_id = f"live/{name}-{uuid.uuid4().hex[:8]}"
+        self.agent: LiveAgent | None = None
+        self.decisions: list[dict[str, Any]] = []
+        #: Per-run overrides set by a demo scenario; None means "the default".
+        self.backend: str | None = None
+        self.profile: str | None = None
+        self.alerted = False
+
+    def reset(self) -> None:
+        self.workspace.reset()
+        self.broker.reset()
+        self.shop.reset()
+        self.chain = DecisionChain()
+        self.chain_id = f"live/{self.name}-{uuid.uuid4().hex[:8]}"
+        self.agent = None
+        self.decisions.clear()
+        self.backend = self.profile = None
+        self.alerted = False
+
+    def summary(self) -> dict[str, Any]:
+        sent = self.agent.toolbox.sent if self.agent else []
+        return {
+            "lane": self.name,
+            "defended": self.defended,
+            "wallet": self.shop.wallet.snapshot(),
+            "orders": list(self.shop.orders),
+            "spent_paise": self.shop.wallet.opening_paise - self.shop.wallet.balance_paise,
+            "revoked": bool(self.agent and not self.broker.is_alive(self.agent.session_id)),
+            "egress_calls": len(sent),
+            "decisions": len(self.decisions),
+        }
 
 
 class LiveState:
@@ -42,18 +112,27 @@ class LiveState:
     def __init__(self) -> None:
         self.subscribers: list[queue.Queue[str]] = []
         self.lock = threading.Lock()
-        self.workspace = Workspace()
-        self.broker = CapabilityBroker()
+        provider, self.payments_error = _payments()
+        self.main = Lane(MAIN, defended=True, provider=provider)
         self.gateway: Any = None
         self.defense_on = True
         self.busy = False
-        self.agent: LiveAgent | None = None
-        self.transcript: list[dict[str, Any]] = []
-        self.decisions: list[dict[str, Any]] = []
+        self.profile = config.AGENT_PROFILE if config.AGENT_PROFILE in PROFILES else "natural"
+        self.twin: dict[str, Lane] = {}
+        self.warmup_ms: dict[str, float] = {}
+
+    # Kept so the rest of the module reads as it always did.
+    @property
+    def workspace(self) -> Workspace:
+        return self.main.workspace
+
+    @property
+    def agent(self) -> LiveAgent | None:
+        return self.main.agent
 
     # ------------------------------------------------------------ events
     def subscribe(self) -> queue.Queue[str]:
-        q: queue.Queue[str] = queue.Queue(maxsize=1000)
+        q: queue.Queue[str] = queue.Queue(maxsize=2000)
         with self.lock:
             self.subscribers.append(q)
         return q
@@ -63,8 +142,11 @@ class LiveState:
             if q in self.subscribers:
                 self.subscribers.remove(q)
 
-    def emit(self, event: str, payload: dict[str, Any]) -> None:
-        frame = f"event: {event}\ndata: {dumps_str(payload)}\n\n"
+    def emit(self, event: str, payload: dict[str, Any], lane: str = MAIN) -> None:
+        # Twin-run lanes get their own event names (`lane.decision`, ...), so
+        # the chat page — which only knows the main session — never sees them.
+        name = event if lane == MAIN else f"lane.{event}"
+        frame = f"event: {name}\ndata: {dumps_str({**payload, 'lane': lane})}\n\n"
         with self.lock:
             targets = list(self.subscribers)
         for q in targets:
@@ -72,26 +154,74 @@ class LiveState:
                 q.put_nowait(frame)
 
     # ------------------------------------------------------------- agent
-    def ensure_agent(self, backend: str, model: str | None) -> LiveAgent:
-        if self.agent is None:
-            if self.defense_on and self.gateway is None:
-                self.gateway = build_gateway(mode="pomdp")
-            self.agent = LiveAgent(
-                workspace=self.workspace,
-                gateway=self.gateway if self.defense_on else None,
-                broker=self.broker,
-                backend=backend,
-                model=model,
+    def load_gateway(self) -> None:
+        """Build the gateway once and take the cold start here, not on the
+        first real decision — where it would blow the latency budget."""
+        if self.gateway is not None:
+            return
+        self.gateway = build_gateway(mode="pomdp")
+        dummy = DecisionContext(
+            user_task_text="warm-up",
+            pending=PendingCall(tool_name="list_files", tool_args={}),
+            history=[],
+            taint_set=set(),
+            expected_tools=frozenset({"list_files"}),
+            task_max_tier=1,
+            suite="live",
+            step_index=0,
+        )
+        timings = []
+        for _ in range(3):
+            self.gateway.start_session()
+            started = time.perf_counter()
+            self.gateway.evaluate(dummy)
+            timings.append((time.perf_counter() - started) * 1000.0)
+        self.gateway.start_session()
+        self.warmup_ms = {"cold": round(timings[0], 2), "warm": round(timings[-1], 2)}
+
+    def ensure_agent(self, lane: Lane | None = None) -> LiveAgent:
+        lane = lane or self.main
+        if lane.agent is None:
+            defended = self.defense_on if lane is self.main else lane.defended
+            if defended:
+                self.load_gateway()
+            lane.agent = LiveAgent(
+                workspace=lane.workspace,
+                gateway=self.gateway if defended else None,
+                broker=lane.broker,
+                backend=lane.backend or BACKEND,
+                model=None if lane.backend else MODEL,
+                shop=lane.shop,
+                chain=lane.chain,
+                profile=lane.profile or self.profile,
             )
-        return self.agent
+        return lane.agent
+
+    def backend_info(self, lane: Lane | None = None) -> dict[str, Any]:
+        agent = self.ensure_agent(lane)
+        shop = (lane or self.main).shop
+        return {
+            "backend": agent.backend,
+            "model": agent.model,
+            "backend_ok": agent.backend_ok,
+            "backend_error": agent.backend_error,
+            "agent_profile": agent.profile,
+            "defense_on": self.defense_on,
+            "payments_provider": shop.provider.name,
+            "payments_mode": shop.provider.mode,
+            "payments_error": self.payments_error,
+            "attacker_url": config.ATTACKER_URL,
+            "sarvam_configured": VOICE_SERVICE.configured,
+            "calle_configured": CALLE_SERVICE.configured,
+            "calle_default_phone": CALLE_SERVICE.default_phone,
+            "calle_dry_run": config.CALLE_DRY_RUN,
+        }
 
     def reset(self) -> None:
-        self.workspace.reset()
-        self.broker.reset()
-        self.agent = None
-        self.transcript.clear()
-        self.decisions.clear()
+        self.main.reset()
+        self.twin.clear()
         self.emit("reset", {})
+        self.emit("wallet", self.main.shop.wallet.snapshot())
 
 
 STATE = LiveState()
@@ -99,84 +229,258 @@ BACKEND = config.LLM_BACKEND
 MODEL: str | None = None
 
 
-def _run_turn(text: str, voice_lang: str | None = None) -> None:
-    """Drive one turn on a worker thread, mirroring every event to the UI."""
-    state = STATE
-    if state.busy:
-        state.emit("log", {"message": "already running"})
-        return
-    state.busy = True
+def _browser_class() -> Any | None:
+    """The desktop-browser driver, or None when its extra is not installed.
+    Chat, documents and payments must work without it."""
     try:
         from arena.live.browser import LiveBrowser
-        LiveBrowser._step_listener = lambda step, thought, action: state.emit(
-            "browser_step", {"step": step, "thought": thought, "action": action}
-        )
-        agent = state.ensure_agent(BACKEND, MODEL)
-        if agent is not None and not state.broker.is_alive(agent.session_id):
-            state.agent = None
-            if state.gateway is not None:
-                state.gateway.start_session()
-            agent = state.ensure_agent(BACKEND, MODEL)
-        state.emit(
-            "backend",
-            {"backend": agent.backend, "model": agent.model, "defense_on": state.defense_on},
-        )
+    except ImportError:
+        return None
+    return LiveBrowser
+
+
+def _alert_owner(lane: Lane, payload: dict[str, Any]) -> None:
+    """On the revoke, ring the owner. Runs after the decision, never in it."""
+    if lane.alerted or not config.ALERT_CALL or not CALLE_SERVICE.configured:
+        return
+    lane.alerted = True
+    tool = str(payload.get("tool", ""))
+    if tool in SHOP_TOOLS:
+        what = "tried to make a purchase you did not ask for"
+    else:
+        what = "tried to send your data to an outside server"
+    message = (
+        f"This is Sentinel-Z. Your assistant was hijacked and {what}. "
+        "It was stopped and its access has been revoked. Nothing was lost."
+    )
+
+    def call() -> None:
+        result = CALLE_SERVICE.place_call(phone="", message=message, recipient_name="the owner")
+        if result.get("ok"):
+            STATE.emit(
+                "alert_call",
+                {
+                    "message": message,
+                    "dry_run": bool(result.get("dry_run")),
+                    "status": result.get("status"),
+                    "phone": str(result.get("phone", ""))[-4:],
+                },
+                lane.name,
+            )
+
+    threading.Thread(target=call, daemon=True).start()
+
+
+def _drive(lane: Lane, text: str, voice_lang: str | None = None) -> None:
+    """Run one turn in `lane`, mirroring every event to the UI."""
+    state = STATE
+    browser = _browser_class() if lane is state.main else None
+    try:
+        if browser is not None:
+            browser._step_listener = lambda step, thought, action: state.emit(
+                "browser_step", {"step": step, "thought": thought, "action": action}
+            )
+        agent = state.ensure_agent(lane)
+        if not lane.broker.is_alive(agent.session_id):
+            lane.agent = None
+            lane.alerted = False
+            agent = state.ensure_agent(lane)
+        if lane is state.main:
+            state.emit("backend", state.backend_info(lane))
         for event, payload in agent.run_turn(text):
             if event == "decision":
-                state.decisions.append(payload)
+                lane.decisions.append(payload)
+                if payload.get("action") == "REVOKE" and "already destroyed" not in str(payload.get("reason")):
+                    _alert_owner(lane, payload)
             if event == "assistant" and voice_lang:
-                try:
+                with contextlib.suppress(Exception):
                     voice_out = VOICE_SERVICE.prepare_voice_completion(
                         str(payload.get("text") or ""), voice_lang
                     )
                     payload = {**payload, "voice": voice_out}
-                except Exception:
-                    pass
-            state.emit(event, payload)
+            state.emit(event, payload, lane.name)
+            if event == "stepup_request" and lane is not state.main:
+                # Nobody is sitting at a twin lane to answer. Decline, after a
+                # beat so the prompt is visible on the dashboard.
+                threading.Timer(1.8, agent.resolve_step_up, args=(False,)).start()
             if (
                 event == "tool_result"
                 and payload.get("tool") == "place_phone_call"
                 and not payload.get("refused")
                 and CALLE_SERVICE.latest_call
             ):
-                state.emit("calle_call", CALLE_SERVICE.latest_call)
-            if event == "tool_result" and payload.get("tool") in (
-                "browser_add_to_cart", "browser_search", "browse_website", "autonomous_browse"
-            ):
-                try:
-                    from arena.live.browser import LiveBrowser
-                    lb = LiveBrowser._instance
+                state.emit("calle_call", CALLE_SERVICE.latest_call, lane.name)
+            if event == "tool_result" and payload.get("tool") in BOOKING_TOOLS and browser is not None:
+                with contextlib.suppress(Exception):
+                    lb = browser._instance
+                    if lb and lb.latest_booking and not str(payload.get("result", "")).startswith("error"):
+                        state.emit("booking", {**lb.latest_booking, "tool": payload.get("tool")})
+            elif event == "tool_result" and payload.get("tool") in BROWSER_TOOLS and browser is not None:
+                with contextlib.suppress(Exception):
+                    lb = browser._instance
                     if lb and lb.latest_url:
                         prod_title = lb.latest_product.get("title") if lb.latest_product else lb.latest_title
                         price_val = lb.latest_product.get("price") if lb.latest_product else ""
-                        state.emit("browser_open", {
-                            "url": lb.latest_url,
-                            "cart_url": lb.latest_cart_url or lb.latest_url,
-                            "title": lb.latest_title or prod_title,
-                            "product": prod_title,
-                            "price": price_val,
-                            "screenshot": getattr(lb, "latest_screenshot_b64", ""),
-                            "tool": payload.get("tool"),
-                        })
-                except Exception:
-                    pass
+                        state.emit(
+                            "browser_open",
+                            {
+                                "url": lb.latest_url,
+                                "cart_url": lb.latest_cart_url or lb.latest_url,
+                                "title": lb.latest_title or prod_title,
+                                "product": prod_title,
+                                "price": price_val,
+                                "screenshot": getattr(lb, "latest_screenshot_b64", ""),
+                                "tool": payload.get("tool"),
+                            },
+                        )
     except Exception as exc:  # a UI must not die on one bad turn
-        state.emit("assistant", {"text": f"Something broke: {type(exc).__name__}: {exc}"})
-        state.emit("done", {})
+        state.emit("assistant", {"text": f"Something broke: {type(exc).__name__}: {exc}"}, lane.name)
+        state.emit("done", {}, lane.name)
     finally:
-        with contextlib.suppress(Exception):
-            from arena.live.browser import LiveBrowser
-            LiveBrowser._step_listener = None
+        if browser is not None:
+            browser._step_listener = None
+        if len(lane.chain):
+            with contextlib.suppress(Exception):
+                write_chain(lane.chain_id, lane.chain.records)
+
+
+def _run_turn(text: str, voice_lang: str | None = None, scenario: dict[str, Any] | None = None) -> None:
+    """Drive one turn of the main lane on a worker thread."""
+    state = STATE
+    if state.busy:
+        # Say so in the chat. Silently dropping the message looks like a hang.
+        state.emit("log", {"message": "already running"})
+        state.emit(
+            "assistant",
+            {"text": "I'm still working on your previous request. I'll be ready for the next one as soon as it finishes."},
+        )
+        state.emit("done", {})
+        return
+    state.busy = True
+    try:
+        _drive(state.main, text, voice_lang)
+        if scenario is not None:
+            state.emit("scenario_end", {"id": scenario["id"], "outcome": state.main.summary()})
+    finally:
+        if scenario is not None:
+            # A scenario's backend/profile apply to that run only.
+            state.main.backend = state.main.profile = None
         state.busy = False
 
 
-def build_app() -> FastAPI:
-    app = FastAPI(title="Sentinel-Z Live", docs_url=None, redoc_url=None)
-    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+def _run_twin(scenario: dict[str, Any]) -> None:
+    """The same request to two agents at once: one undefended, one defended."""
+    state = STATE
+    if state.busy:
+        state.emit("log", {"message": "already running"})
+        return
+    state.busy = True
+    try:
+        state.load_gateway()
+        lanes = {
+            "undefended": Lane("undefended", defended=False),
+            "defended": Lane("defended", defended=True),
+        }
+        state.twin = lanes
+        # The shared gateway is about to serve the defended lane.
+        state.main.agent = None
+        for lane in lanes.values():
+            _stage(lane, scenario)
+            state.emit("wallet", lane.shop.wallet.snapshot(), lane.name)
+        state.emit(
+            "twin_start",
+            {"id": scenario["id"], "title": scenario["title"], "narration": scenario.get("narration", ""),
+             "prompt": scenario["prompt"], "poison": scenario.get("poison"), "expect": scenario.get("expect")},
+        )
+        threads = [
+            threading.Thread(target=_drive, args=(lane, scenario["prompt"]), daemon=True)
+            for lane in lanes.values()
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=180.0)
+        state.emit(
+            "twin_end",
+            {"id": scenario["id"], "outcome": {name: lane.summary() for name, lane in lanes.items()}},
+        )
+    finally:
+        state.main.agent = None
+        state.busy = False
 
-    @app.on_event("startup")
-    async def startup_event() -> None:
-        STATE.ensure_agent(BACKEND, MODEL)
+
+# -------------------------------------------------------------- scenarios
+def load_scenarios() -> list[dict[str, Any]]:
+    return list(loads(SCENARIOS_PATH.read_text(encoding="utf-8"))["scenarios"])
+
+
+def _stage(lane: Lane, scenario: dict[str, Any]) -> None:
+    """Put `lane` in the scenario's starting state."""
+    lane.reset()
+    lane.backend = scenario.get("backend")
+    profile = scenario.get("profile")
+    if profile == "auto":
+        # Use the model's own behaviour when it is known to fall for the
+        # attack; otherwise the labelled simulated weakness.
+        probe = STATE.ensure_agent(lane)
+        gullible = not probe.backend_error and probe.model in config.NATURAL_ATTACK_MODELS
+        profile = "natural" if gullible else "susceptible"
+        lane.agent = None
+    lane.profile = profile
+    if scenario.get("poison"):
+        lane.shop.plant(str(scenario["poison"]))
+    sample = scenario.get("sample")
+    if sample:
+        _load_sample(lane, str(sample))
+    # A scenario must still run with the network down: if the chosen model
+    # does not answer, the deterministic agent takes over, and says so.
+    agent = STATE.ensure_agent(lane)
+    if agent.backend_error:
+        lane.agent = None
+        lane.backend = "scripted"
+        STATE.emit("log", {"message": f"model backend unavailable ({agent.backend_error}); using the scripted agent"})
+
+
+def _load_sample(lane: Lane, filename: str) -> dict[str, Any] | None:
+    path = (DEMO_DOCS_DIR / filename).resolve()
+    # Only files directly inside demo_docs/ — never a path that climbs out.
+    if path.parent != DEMO_DOCS_DIR.resolve() or not path.is_file():
+        return None
+    content = path.read_text(encoding="utf-8", errors="replace")
+    if "query" in filename.lower() or "mail" in filename.lower():
+        subject, sender, body = _parse_email(content, filename)
+        lane.workspace.add_email(sender=sender, subject=subject, body=body)
+        return {"name": subject, "kind": "email"}
+    lane.workspace.add_document(name=filename, content=content)
+    return {"name": filename, "kind": "document"}
+
+
+def _evidence(lane: Lane) -> dict[str, Any]:
+    records = lane.chain.records
+    ok, bad = verify(records)
+    return {"records": records, "verified": ok, "bad_index": bad, "head": lane.chain.head, "lane": lane.name}
+
+
+def _lane(name: str | None) -> Lane:
+    return STATE.twin.get(str(name or ""), STATE.main)
+
+
+@contextlib.asynccontextmanager
+async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
+    STATE.load_gateway()
+    agent = STATE.ensure_agent()
+    print(f"  decision path warm-up: cold {STATE.warmup_ms.get('cold')} ms, warm {STATE.warmup_ms.get('warm')} ms")
+    if agent.backend_error:
+        print(f"  WARNING: backend `{agent.backend}` ({agent.model}) is not answering: {agent.backend_error}")
+    if STATE.payments_error:
+        print(f"  WARNING: payments fell back to mock: {STATE.payments_error}")
+    yield
+
+
+def build_app() -> FastAPI:
+    app = FastAPI(title="Sentinel-Z Live", docs_url=None, redoc_url=None, lifespan=_lifespan)
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+    app.include_router(build_router(lambda: STATE.main.shop))
 
     @app.get("/")
     async def index() -> FileResponse:
@@ -193,19 +497,10 @@ def build_app() -> FastAPI:
         def generate():
             try:
                 yield "retry: 2000\n\n"
-                agent = STATE.ensure_agent(BACKEND, MODEL)
-                init_data = dumps_str(
-                    {
-                        "backend": agent.backend,
-                        "model": agent.model,
-                        "defense_on": STATE.defense_on,
-                        "attacker_url": config.ATTACKER_URL,
-                        "sarvam_configured": VOICE_SERVICE.configured,
-                        "calle_configured": CALLE_SERVICE.configured,
-                        "calle_default_phone": CALLE_SERVICE.default_phone,
-                    }
-                )
-                yield f"event: backend\ndata: {init_data}\n\n"
+                init = {**STATE.backend_info(), "lane": MAIN}
+                yield f"event: backend\ndata: {dumps_str(init)}\n\n"
+                wallet = {**STATE.main.shop.wallet.snapshot(), "lane": MAIN}
+                yield f"event: wallet\ndata: {dumps_str(wallet)}\n\n"
                 while True:
                     try:
                         yield q.get(timeout=15.0)
@@ -222,20 +517,19 @@ def build_app() -> FastAPI:
 
     @app.get("/api/status")
     async def status() -> JSONResponse:
-        agent = STATE.ensure_agent(BACKEND, MODEL)
+        main = STATE.main
         return JSONResponse(
             {
-                "backend": agent.backend,
-                "model": agent.model,
-                "defense_on": STATE.defense_on,
+                **STATE.backend_info(),
                 "busy": STATE.busy,
-                "documents": sorted(STATE.workspace.documents),
-                "emails": len(STATE.workspace.emails),
-                "decisions": STATE.decisions[-50:],
-                "attacker_url": config.ATTACKER_URL,
-                "sarvam_configured": VOICE_SERVICE.configured,
-                "calle_configured": CALLE_SERVICE.configured,
-                "calle_default_phone": CALLE_SERVICE.default_phone,
+                "documents": sorted(main.workspace.documents),
+                "emails": len(main.workspace.emails),
+                "decisions": main.decisions[-50:],
+                "wallet": main.shop.wallet.snapshot(),
+                "cart": main.shop.cart_payload(),
+                "mandate": {"max_paise": main.broker.spend_limit(main.agent.session_id) if main.agent else None},
+                "poison": main.shop.poison,
+                "warmup_ms": STATE.warmup_ms,
             }
         )
 
@@ -250,6 +544,7 @@ def build_app() -> FastAPI:
         threading.Thread(target=_run_turn, args=(text, voice_lang), daemon=True).start()
         return JSONResponse({"ok": True})
 
+    # ------------------------------------------------------------- voice
     @app.post("/api/voice/stt")
     async def voice_stt(payload: dict[str, Any]) -> JSONResponse:
         audio_b64 = str(payload.get("audio_b64") or "").strip()
@@ -296,6 +591,7 @@ def build_app() -> FastAPI:
             }
         )
 
+    # --------------------------------------------------------- workspace
     @app.post("/api/upload")
     async def upload(payload: dict[str, Any]) -> JSONResponse:
         """Uploads arrive as JSON, not multipart.
@@ -341,17 +637,29 @@ def build_app() -> FastAPI:
 
     @app.post("/api/stepup")
     async def stepup(payload: dict[str, Any]) -> JSONResponse:
-        if STATE.agent is None:
+        agent = _lane(payload.get("lane")).agent
+        if agent is None:
             return JSONResponse({"ok": False}, status_code=409)
-        STATE.agent.resolve_step_up(bool(payload.get("approved")))
+        agent.resolve_step_up(bool(payload.get("approved")))
         return JSONResponse({"ok": True})
 
     @app.post("/api/defense")
     async def defense(payload: dict[str, Any]) -> JSONResponse:
         STATE.defense_on = bool(payload.get("on", True))
-        STATE.agent = None  # a new session, so the change actually takes effect
+        STATE.main.agent = None  # a new session, so the change actually takes effect
         STATE.emit("log", {"message": f"defense {'on' if STATE.defense_on else 'OFF'} — new session"})
+        STATE.emit("backend", STATE.backend_info())
         return JSONResponse({"defense_on": STATE.defense_on})
+
+    @app.post("/api/profile")
+    async def profile(payload: dict[str, Any]) -> JSONResponse:
+        chosen = str(payload.get("profile", "")).strip().lower()
+        if chosen not in PROFILES:
+            return JSONResponse({"ok": False, "error": f"profile must be one of {list(PROFILES)}"}, status_code=400)
+        STATE.profile = chosen
+        STATE.main.agent = None
+        STATE.emit("backend", STATE.backend_info())
+        return JSONResponse({"ok": True, "agent_profile": chosen})
 
     @app.post("/api/reset")
     async def reset() -> JSONResponse:
@@ -374,47 +682,155 @@ def build_app() -> FastAPI:
             }
             for email in STATE.workspace.emails.values()
         ]
-        demo_dir = config.REPO_ROOT / "demo_docs"
-        samples = []
-        if demo_dir.exists():
-            for p in sorted(demo_dir.glob("*.txt")):
-                samples.append({
-                    "filename": p.name,
-                    "is_poisoned": "POISONED" in p.name or "EVASIVE" in p.name,
-                })
+        samples = [
+            {"filename": p.name, "is_poisoned": "POISONED" in p.name or "EVASIVE" in p.name}
+            for p in sorted(DEMO_DOCS_DIR.glob("*.txt"))
+        ]
         return JSONResponse({"documents": docs, "emails": emails, "samples": samples})
 
     @app.post("/api/sample/load")
     async def load_sample(payload: dict[str, Any]) -> JSONResponse:
         filename = str(payload.get("filename", "")).strip()
-        demo_path = config.REPO_ROOT / "demo_docs" / filename
-        if not demo_path.exists() or not demo_path.is_file():
+        loaded = _load_sample(STATE.main, filename)
+        if loaded is None:
             return JSONResponse({"ok": False, "error": "Sample file not found"}, status_code=404)
-        content = demo_path.read_text(encoding="utf-8", errors="replace")
-        if "query" in filename.lower() or "mail" in filename.lower():
-            subj, sender, body = _parse_email(content, filename)
-            STATE.workspace.add_email(sender=sender, subject=subj, body=body)
-            STATE.emit("upload", {"name": subj, "kind": "email"})
-        else:
-            STATE.workspace.add_document(name=filename, content=content)
-            STATE.emit("upload", {"name": filename, "kind": "document"})
-        return JSONResponse({"ok": True, "name": filename})
+        STATE.emit("upload", loaded)
+        return JSONResponse({"ok": True, **loaded})
 
     @app.post("/api/backend")
     async def switch_backend(payload: dict[str, Any]) -> JSONResponse:
         global BACKEND, MODEL
         req_backend = str(payload.get("backend", "auto")).strip().lower()
         req_model = payload.get("model")
-        if req_model:
-            MODEL = str(req_model).strip()
+        MODEL = str(req_model).strip() if req_model else None
         BACKEND = req_backend
-        STATE.agent = None
-        agent = STATE.ensure_agent(BACKEND, MODEL)
+        STATE.main.agent = None
+        try:
+            info = STATE.backend_info()
+        except RuntimeError as exc:
+            return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+        STATE.emit("backend", info)
+        return JSONResponse({"ok": True, **info})
+
+    # ------------------------------------------------------ wallet / shop
+    @app.get("/api/wallet")
+    async def wallet(lane: str = MAIN) -> JSONResponse:
+        chosen = _lane(lane)
+        return JSONResponse({**chosen.shop.wallet.snapshot(), "cart": chosen.shop.cart_payload(), "orders": chosen.shop.orders})
+
+    @app.post("/api/wallet/topup")
+    async def wallet_topup(payload: dict[str, Any]) -> JSONResponse:
+        """Add money to the demo wallet.
+
+        With a payment gateway configured this creates a sandbox order for the
+        amount first, exactly as a purchase does, and only then credits the
+        wallet. No real money moves: it is a test order, and the wallet is a
+        number held by this demo.
+        """
+        try:
+            rupees = float(str(payload.get("amount_inr", "")).replace(",", "").strip())
+        except ValueError:
+            return JSONResponse({"ok": False, "error": "Enter an amount in rupees."}, status_code=400)
+        if not 1 <= rupees <= MAX_TOPUP_INR:
+            return JSONResponse(
+                {"ok": False, "error": f"Enter an amount between ₹1 and ₹{MAX_TOPUP_INR:,}."}, status_code=400
+            )
+        shop = STATE.main.shop
+        amount = int(round(rupees * 100))
+        receipt = f"sz-topup-{len(shop.wallet.ledger) + 1}"
+        try:
+            order = shop.provider.create_order(amount, receipt, {"purpose": "wallet-topup", "source": "sentinel-z-demo"})
+        except PaymentError as exc:
+            return JSONResponse({"ok": False, "error": f"The payment gateway refused the top-up: {exc}"}, status_code=502)
+        shop.wallet.credit(amount, order.order_id, "Wallet top-up")
+        snapshot = shop.wallet.snapshot(amount, "Wallet top-up")
+        STATE.emit("wallet", snapshot)
         STATE.emit(
-            "backend",
-            {"backend": agent.backend, "model": agent.model, "defense_on": STATE.defense_on},
+            "topup",
+            {"amount_paise": amount, "order_id": order.order_id, "provider": order.provider, "mode": order.mode},
         )
-        return JSONResponse({"ok": True, "backend": agent.backend, "model": agent.model})
+        return JSONResponse({"ok": True, "order_id": order.order_id, "provider": order.provider, **snapshot})
+
+    @app.post("/api/shop/poison")
+    async def shop_poison(payload: dict[str, Any]) -> JSONResponse:
+        """Plant (or remove) the attacker's review on the target listing."""
+        shop = STATE.main.shop
+        variant = str(payload.get("variant", "loud")).strip().lower()
+        text = str(payload.get("text") or "").strip()
+        if variant == "off" and not text:
+            shop.poison = None
+        else:
+            shop.plant(variant, text or None)
+        STATE.emit("poison", {"planted": shop.poison is not None, "sku": POISON["target_sku"], "review": shop.poison})
+        return JSONResponse({"ok": True, "planted": shop.poison is not None, "review": shop.poison})
+
+    # --------------------------------------------------------- scenarios
+    @app.get("/api/demo/scenarios")
+    async def scenarios() -> JSONResponse:
+        return JSONResponse({"scenarios": load_scenarios()})
+
+    def _find(scenario_id: str) -> dict[str, Any] | None:
+        return next((s for s in load_scenarios() if s["id"] == scenario_id), None)
+
+    @app.post("/api/demo/run")
+    async def demo_run(payload: dict[str, Any]) -> JSONResponse:
+        scenario = _find(str(payload.get("id", "")))
+        if scenario is None:
+            return JSONResponse({"ok": False, "error": "unknown scenario"}, status_code=404)
+        if STATE.busy:
+            return JSONResponse({"ok": False, "error": "busy"}, status_code=409)
+        STATE.defense_on = bool(payload["defense"]) if "defense" in payload else bool(scenario.get("defense", True))
+        # `scenario_start` is the pages' cue to clear themselves. A `reset`
+        # event would make them reload and miss the run that follows.
+        _stage(STATE.main, scenario)
+        STATE.emit(
+            "scenario_start",
+            {k: scenario.get(k) for k in ("id", "title", "narration", "prompt", "poison", "expect", "sample")},
+        )
+        STATE.emit("backend", STATE.backend_info())
+        STATE.emit("wallet", STATE.main.shop.wallet.snapshot())
+        STATE.emit("user", {"text": scenario["prompt"], "voice_lang": None})
+        threading.Thread(target=_run_turn, args=(scenario["prompt"], None, scenario), daemon=True).start()
+        return JSONResponse({"ok": True, "id": scenario["id"]})
+
+    @app.post("/api/demo/twin")
+    async def demo_twin(payload: dict[str, Any]) -> JSONResponse:
+        scenario = _find(str(payload.get("id", "")))
+        if scenario is None:
+            return JSONResponse({"ok": False, "error": "unknown scenario"}, status_code=404)
+        if STATE.busy:
+            return JSONResponse({"ok": False, "error": "busy"}, status_code=409)
+        threading.Thread(target=_run_twin, args=(scenario,), daemon=True).start()
+        return JSONResponse({"ok": True, "id": scenario["id"]})
+
+    # ---------------------------------------------------------- evidence
+    @app.get("/api/evidence")
+    async def evidence(lane: str = MAIN) -> JSONResponse:
+        return JSONResponse(_evidence(_lane(lane)))
+
+    @app.post("/api/evidence/tamper-demo")
+    async def tamper_demo(payload: dict[str, Any]) -> JSONResponse:
+        """Edit one record in a COPY of the chain and verify the copy.
+
+        The real log is never touched. This is what an attacker who rewrote
+        history would be caught by.
+        """
+        lane = _lane(payload.get("lane"))
+        records = copy.deepcopy(lane.chain.records)
+        decisions = [i for i, r in enumerate(records) if r.get("kind") == "decision"]
+        if not decisions:
+            return JSONResponse({"ok": False, "error": "no decisions recorded yet"}, status_code=409)
+        blocking = [i for i in decisions if records[i]["decision"].get("action") == "REVOKE"]
+        index = int(payload["index"]) if "index" in payload else (blocking[0] if blocking else decisions[-1])
+        if index not in decisions:
+            return JSONResponse({"ok": False, "error": "not a decision record"}, status_code=400)
+        before = records[index]["decision"]["action"]
+        records[index]["decision"]["action"] = "ALLOW"
+        ok, bad = verify(records)
+        return JSONResponse(
+            {"ok": True, "tampered_index": index, "field": "decision.action", "before": before,
+             "after": "ALLOW", "verified": ok, "bad_index": bad, "total": len(records)}
+        )
 
     return app
 
@@ -438,18 +854,28 @@ def _parse_email(text: str, fallback_name: str) -> tuple[str, str, str]:
 def main(argv: list[str] | None = None) -> int:
     global BACKEND, MODEL
     parser = argparse.ArgumentParser(description="Sentinel-Z Live.")
-    port_default = int(os.environ.get("PORT", str(config.UI_PORT + 1)))
-    host_default = os.environ.get("HOST", "0.0.0.0")
-    parser.add_argument("--host", default=host_default)
-    parser.add_argument("--port", type=int, default=port_default)
+    parser.add_argument("--host", default=config.LIVE_HOST)
+    parser.add_argument("--port", type=int, default=config.LIVE_PORT)
     parser.add_argument("--backend", default=config.LLM_BACKEND, choices=["auto", "nvidia", "gemini", "ollama", "llm", "scripted"])
-    parser.add_argument("--model", default=None, help="override SENTINELZ_OLLAMA_MODEL")
+    parser.add_argument("--model", default=None, help="override the backend's default model")
+    parser.add_argument("--profile", default=None, choices=list(PROFILES), help="agent profile")
     args = parser.parse_args(argv)
 
     BACKEND, MODEL = args.backend, args.model
-    print(f"Sentinel-Z Live   chat: http://{args.host}:{args.port}/")
-    print(f"                  dash: http://{args.host}:{args.port}/dashboard")
+    # The Windows console defaults to cp1252, which cannot print a rupee sign.
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            with contextlib.suppress(Exception):
+                reconfigure(encoding="utf-8", errors="replace")
+    if args.profile:
+        STATE.profile = args.profile
+    shown = "127.0.0.1" if args.host in ("0.0.0.0", "::") else args.host
+    print(f"Sentinel-Z Live   chat: http://{shown}:{args.port}/")
+    print(f"                  dash: http://{shown}:{args.port}/dashboard")
+    print(f"                  shop: http://{shown}:{args.port}/shop")
     print(f"              attacker: {config.ATTACKER_URL}")
+    print(f"               wallet: {inr(STATE.main.shop.wallet.balance_paise)}  payments: {STATE.main.shop.provider.name}")
     uvicorn.run(build_app(), host=args.host, port=args.port, log_level="info")
     return 0
 

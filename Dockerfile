@@ -20,9 +20,9 @@ ENV PYTHONUNBUFFERED=1 \
 # Copy package requirements first for Docker layer caching
 COPY pyproject.toml .
 
-# Install dependencies including victim stack, browser-use, and langchain-openai
+# Install the victim stack plus the live-browser extra
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir .[victim] browser-use langchain-openai
+    pip install --no-cache-dir .[victim,live]
 
 # Copy codebase
 COPY . .

@@ -2,9 +2,19 @@
 
 from __future__ import annotations
 
-import pytest
+import os
 
-from sentinelz.context import DecisionContext, ObservedStep, PendingCall
+# Tests never talk to a real model. This must run before any project import:
+# `arena.config` reads the backend at import time, and `.env` (which
+# python-dotenv will not let override a variable that is already set) may name
+# a cloud backend.
+os.environ["SENTINELZ_LLM_BACKEND"] = "scripted"
+os.environ["SENTINELZ_PAYMENTS"] = "mock"
+os.environ["CALLE_DRY_RUN"] = "1"
+
+import pytest  # noqa: E402
+
+from sentinelz.context import DecisionContext, ObservedStep, PendingCall  # noqa: E402
 
 BENIGN_RESULT = (
     "- id_: '13'\n  title: Networking Event\n  description: Industry networking event to meet "

@@ -1,0 +1,113 @@
+/* Aura — wallet, shop view, receipt and approval card. Uses style.css tokens. */
+
+.wallet-wrap { position: relative; }
+.pill.wallet {
+  cursor: pointer; gap: 6px;
+  font-variant-numeric: tabular-nums; font-weight: 700;
+  background: var(--surface); color: var(--ink); border-color: var(--line-strong);
+}
+.pill.wallet svg { color: var(--ink-3); }
+.pill.wallet.pulse { animation: walletPulse 0.9s var(--ease); }
+.pill.wallet.low { color: var(--danger); border-color: var(--danger-border); background: var(--danger-bg); }
+@keyframes walletPulse { 30% { transform: scale(1.08); box-shadow: var(--shadow-glow); } }
+
+.wallet-pop {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 30;
+  width: 290px; padding: 14px;
+  background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--r-md);
+  box-shadow: var(--shadow-lg);
+  display: none;
+}
+.wallet-pop.open { display: block; }
+.wp-head { display: flex; justify-content: space-between; align-items: baseline; color: var(--ink-3); font-size: 12px; }
+.wp-head b { font-size: 22px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.wallet-pop ul { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; }
+.wallet-pop li { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; color: var(--ink-2); }
+.wallet-pop li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wallet-pop li b { font-variant-numeric: tabular-nums; color: var(--ink); flex: none; }
+.wallet-pop li.none { color: var(--muted); }
+.wp-foot { margin-top: 10px; font-size: 12px; color: var(--ink-3); }
+.wp-foot:empty { display: none; }
+
+/* The page the assistant is shopping on */
+.shopview {
+  border: 1px solid var(--line-strong); border-radius: var(--r-md); overflow: hidden;
+  background: #f6f4ef; box-shadow: var(--shadow-md); margin: 4px 0;
+}
+.sv-bar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: var(--surface-2); border-bottom: 1px solid var(--line); }
+.sv-bar i { width: 9px; height: 9px; border-radius: 50%; background: var(--line-strong); }
+.sv-bar span { margin-left: 8px; font-size: 12px; color: var(--ink-3); font-family: ui-monospace, Consolas, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.shopview iframe { display: block; width: 100%; height: 300px; border: 0; background: #f6f4ef; }
+
+/* Receipt */
+.receipt {
+  max-width: 340px; padding: 16px 18px; border-radius: var(--r-md);
+  background: var(--surface); border: 1px solid var(--ok-border);
+  box-shadow: var(--shadow-md);
+}
+.rc-top { display: flex; justify-content: space-between; align-items: center; }
+.rc-ok { color: var(--ok); font-weight: 700; font-size: 13px; }
+.rc-ok::before { content: "✓ "; }
+.rc-stamp { font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; color: var(--ink-3); border: 1px dashed var(--line-strong); border-radius: 5px; padding: 2px 7px; }
+.rc-amount { font-size: 32px; font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; margin-top: 8px; color: var(--ink); }
+.rc-item { color: var(--ink-2); font-size: 14px; margin-bottom: 12px; }
+.receipt dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; padding-top: 10px; border-top: 1px dashed var(--line-strong); font-size: 12.5px; }
+.receipt dt { color: var(--ink-3); }
+.receipt dd { margin: 0; color: var(--ink-2); text-align: right; overflow: hidden; text-overflow: ellipsis; }
+.receipt .mono { font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; }
+
+.paynote { font-size: 13px; color: var(--ink-3); padding: 8px 12px; border-left: 3px solid var(--line-strong); }
+
+/* Over-budget approval */
+.approve {
+  max-width: 400px; padding: 18px 20px; border-radius: var(--r-lg);
+  background: var(--surface); border: 1px solid var(--warn-border);
+  box-shadow: var(--shadow-md);
+}
+.ap-kicker { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--warn); }
+.ap-title { font-size: 20px; font-weight: 700; margin: 6px 0 2px; color: var(--ink); }
+.ap-title b { font-variant-numeric: tabular-nums; }
+.ap-item { color: var(--ink-2); font-size: 14px; }
+.ap-why { color: var(--ink-3); font-size: 13px; margin: 8px 0 14px; }
+.ap-row { display: flex; gap: 10px; justify-content: flex-end; }
+.approve.is-declined { border-color: var(--line-strong); opacity: 0.75; }
+.approve.is-declined .ap-kicker { color: var(--ink-3); }
+.approve.is-approved { border-color: var(--ok-border); }
+.approve.is-approved .ap-kicker { color: var(--ok); }
+
+/* Movie seats and flight look-ups */
+.booking {
+  max-width: 520px; border-radius: var(--r-lg); overflow: hidden;
+  background: var(--surface); border: 1px solid var(--line-strong); box-shadow: var(--shadow-md);
+}
+.bk-head { display: flex; align-items: center; gap: 8px; padding: 10px 16px; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; color: var(--ink-2); background: var(--surface-2); border-bottom: 1px dashed var(--line-strong); }
+.bk-head span { flex: 1; }
+.bk-head em { font-style: normal; font-weight: 600; letter-spacing: 0; padding: 2px 9px; border-radius: var(--r-full); background: var(--warn-bg); color: var(--warn); border: 1px solid var(--warn-border); }
+.bk-title { padding: 14px 16px 2px; font-size: 21px; font-weight: 800; letter-spacing: -0.01em; color: var(--ink); display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.bk-title i { font-style: normal; color: var(--primary); }
+.booking dl { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 8px 14px; margin: 0; padding: 12px 16px 14px; align-items: baseline; }
+.booking dt { font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
+.booking dd { margin: 0; font-size: 14.5px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.bk-more { padding: 0 16px 12px; font-size: 12.5px; color: var(--ink-3); }
+.bk-shot { display: block; width: 100%; max-height: 190px; object-fit: cover; object-position: center 35%; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); cursor: zoom-in; background: #fff; }
+.bk-shot.is-big { max-height: none; cursor: zoom-out; }
+.bk-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; font-size: 12.5px; color: var(--ink-3); }
+.bk-foot .btn { height: 32px; display: inline-flex; align-items: center; text-decoration: none; flex: none; }
+
+/* Add money to the wallet */
+.wallet-pop { width: 320px; }
+.wallet-pop li b.in { color: var(--ok); }
+.wp-add { margin-top: 12px; padding: 12px; border-radius: var(--r); background: var(--surface-2); border: 1px solid var(--line); }
+.wp-add label { display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 8px; }
+.wp-row { display: flex; align-items: center; gap: 8px; }
+.wp-row span { color: var(--ink-3); font-weight: 700; }
+.wp-row input { flex: 1; min-width: 0; height: 36px; padding: 0 10px; border-radius: var(--r); border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); font: inherit; font-variant-numeric: tabular-nums; }
+.wp-row input:focus { outline: 2px solid var(--primary); outline-offset: 1px; }
+.wp-row .btn { flex: none; }
+.wp-quick { display: flex; gap: 6px; margin-top: 8px; }
+.wp-quick button { flex: 1; height: 28px; border-radius: var(--r-full); border: 1px solid var(--line-strong); background: transparent; color: var(--ink-2); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.wp-quick button:hover { background: var(--surface-hover); color: var(--ink); }
+.wp-msg { margin-top: 8px; font-size: 12px; color: var(--ink-3); overflow-wrap: anywhere; }
+.wp-msg:empty { display: none; }
+.wp-msg.ok { color: var(--ok); }
+.wp-msg.bad { color: var(--danger); }

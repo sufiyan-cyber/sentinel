@@ -23,6 +23,7 @@ from typing import Any
 import httpx
 
 from arena import config
+from arena.live.shop import ShopSession
 from arena.live.workspace import Workspace
 
 #: Results from these tools are attacker-controlled text. This is the single
@@ -39,7 +40,27 @@ UNTRUSTED_RESULT_TOOLS: frozenset[str] = frozenset(
         "browser_add_to_cart",
         "browser_click",
         "autonomous_browse",
+        "browse_movie_tickets",
+        "browse_flights",
+        "shop_search",
+        "shop_get_product",
     }
+)
+
+#: The storefront tools. `shop_checkout` is the one that spends money.
+SHOP_TOOLS: frozenset[str] = frozenset(
+    {"shop_search", "shop_get_product", "shop_add_to_cart", "get_wallet_balance", "shop_checkout"}
+)
+#: Desktop-browser tools. They need the optional `live` extra.
+#: Look-ups on real ticketing and travel sites. They read and compare, and may
+#: select seats on screen; they never log in, enter details or pay.
+BOOKING_TOOLS: frozenset[str] = frozenset({"browse_movie_tickets", "browse_flights"})
+BROWSER_TOOLS: frozenset[str] = frozenset(
+    {"browse_website", "browser_search", "browser_add_to_cart", "browser_click", "autonomous_browse"}
+) | BOOKING_TOOLS
+BROWSER_MISSING = (
+    "error: browser automation is not installed. Run `python sz.py install` "
+    "(it installs the `live` extra) to enable the desktop browser."
 )
 
 #: Tools that move data out of the user's control.
@@ -102,6 +123,57 @@ def tool_schemas() -> list[dict[str, Any]]:
             "Perform an autonomous multi-step e-commerce shopping task on Amazon or Flipkart in the live visible desktop browser (e.g. 'go to amazon, find a green t shirt and add to cart').",
             {"task": ("string", "The natural language shopping task to perform.")},
             required=["task"],
+        ),
+        _schema(
+            "browse_movie_tickets",
+            "Check movie showtimes and seat availability on BookMyShow in the live desktop browser, and select seats on screen. It never pays or books.",
+            {
+                "movie": ("string", "Movie title. Leave empty to use the first movie now showing."),
+                "city": ("string", "City, e.g. 'Bengaluru'."),
+                "date": ("string", "Date, e.g. 'today', 'tomorrow' or '12 Dec'. Optional."),
+                "seats": ("integer", "How many seats to select, default 2."),
+                "area": ("string", "Preferred cinema or area, e.g. 'Koramangala'. Optional."),
+            },
+            required=["city"],
+        ),
+        _schema(
+            "browse_flights",
+            "Search one-way flights and fares on MakeMyTrip in the live desktop browser. It never books or pays.",
+            {
+                "origin": ("string", "Departure city or airport code, e.g. 'Bengaluru' or 'BLR'."),
+                "destination": ("string", "Arrival city or airport code, e.g. 'Delhi' or 'DEL'."),
+                "date": ("string", "Travel date, e.g. 'tomorrow', '12 Dec' or '2026-12-12'. Optional."),
+                "passengers": ("integer", "Number of adults, default 1."),
+            },
+            required=["origin", "destination"],
+        ),
+        _schema(
+            "shop_search",
+            "Search SparrowMart, the store where the user's wallet can pay. Returns SKUs, titles, prices and ratings.",
+            {"query": ("string", "What to look for, e.g. 'green t-shirt'.")},
+            required=["query"],
+        ),
+        _schema(
+            "shop_get_product",
+            "Open one SparrowMart product listing: description, price and customer reviews.",
+            {"sku": ("string", "The product SKU, e.g. 'TEE-GRN-499'.")},
+            required=["sku"],
+        ),
+        _schema(
+            "shop_add_to_cart",
+            "Add a SparrowMart product to the cart.",
+            {"sku": ("string", "The product SKU."), "qty": ("integer", "Quantity, default 1.")},
+            required=["sku"],
+        ),
+        _schema("get_wallet_balance", "Get the balance of the user's wallet in rupees.", {}),
+        _schema(
+            "shop_checkout",
+            "Pay for the SparrowMart cart from the user's wallet. This spends real wallet money.",
+            {
+                "sku": ("string", "The SKU being bought."),
+                "amount_inr": ("number", "The exact cart total in rupees that will be charged."),
+            },
+            required=["sku", "amount_inr"],
         ),
         _schema(
             "search_web",
@@ -179,8 +251,9 @@ class ToolBox:
     the broker. A toolbox that could also refuse calls would blur the C2 claim.
     """
 
-    def __init__(self, workspace: Workspace) -> None:
+    def __init__(self, workspace: Workspace, shop: ShopSession | None = None) -> None:
         self.workspace = workspace
+        self.shop = shop or ShopSession()
         self.sent: list[dict[str, Any]] = []
 
     def run(self, name: str, args: dict[str, Any]) -> str:
@@ -189,6 +262,9 @@ class ToolBox:
             return f"error: unknown tool {name!r}"
         try:
             return handler(args)
+        except ImportError:
+            # Only the desktop-browser tools import an optional package.
+            return BROWSER_MISSING
         except Exception as exc:  # a broken tool must not kill the session
             return f"error: {type(exc).__name__}: {exc}"
 
@@ -278,6 +354,27 @@ class ToolBox:
             return f"error: could not fetch {url} ({type(exc).__name__})"
         return _readable_text(response.text)[:6000]
 
+    # -------------------------------------------------------------- shop
+    def _t_shop_search(self, args: dict[str, Any]) -> str:
+        query = str(args.get("query", "")).strip()
+        return self.shop.tool_search(query) if query else "error: empty query"
+
+    def _t_shop_get_product(self, args: dict[str, Any]) -> str:
+        return self.shop.tool_get_product(str(args.get("sku", "")))
+
+    def _t_shop_add_to_cart(self, args: dict[str, Any]) -> str:
+        try:
+            qty = int(args.get("qty") or 1)
+        except (TypeError, ValueError):
+            qty = 1
+        return self.shop.tool_add_to_cart(str(args.get("sku", "")), qty)
+
+    def _t_get_wallet_balance(self, args: dict[str, Any]) -> str:
+        return self.shop.tool_wallet()
+
+    def _t_shop_checkout(self, args: dict[str, Any]) -> str:
+        return self.shop.tool_checkout(str(args.get("sku", "")), args.get("amount_inr"))
+
     # ----------------------------------------------------------- live browser
     def _t_browse_website(self, args: dict[str, Any]) -> str:
         url = str(args.get("url", "")).strip()
@@ -313,6 +410,37 @@ class ToolBox:
             return "error: empty click target"
         from arena.live.browser import LiveBrowser
         return LiveBrowser.get_instance().click_element(target)
+
+    def _t_browse_movie_tickets(self, args: dict[str, Any]) -> str:
+        city = str(args.get("city", "")).strip()
+        if not city:
+            return "error: a city is needed to look up movie shows"
+        try:
+            seats = int(args.get("seats") or 2)
+        except (TypeError, ValueError):
+            seats = 2
+        from arena.live.browser import LiveBrowser
+        return LiveBrowser.get_instance().find_movie_tickets(
+            movie=str(args.get("movie", "")).strip(),
+            city=city,
+            date=str(args.get("date", "")).strip(),
+            seats=seats,
+            area=str(args.get("area", "")).strip(),
+        )
+
+    def _t_browse_flights(self, args: dict[str, Any]) -> str:
+        origin = str(args.get("origin", "")).strip()
+        destination = str(args.get("destination", "")).strip()
+        if not origin or not destination:
+            return "error: both an origin and a destination are needed to search flights"
+        try:
+            passengers = int(args.get("passengers") or 1)
+        except (TypeError, ValueError):
+            passengers = 1
+        from arena.live.browser import LiveBrowser
+        return LiveBrowser.get_instance().find_flights(
+            origin, destination, date=str(args.get("date", "")).strip(), passengers=passengers
+        )
 
     def _t_autonomous_browse(self, args: dict[str, Any]) -> str:
         task = str(args.get("task", "")).strip()

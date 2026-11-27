@@ -3,98 +3,180 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sentinel-Z — Live Defense Dashboard</title>
-<link rel="stylesheet" href="/static/style.css">
+<title>Sentinel-Z — Defense Console</title>
+<link rel="stylesheet" href="/static/dashboard.css?v=2">
 </head>
 <body>
 
-<svg class="hidden" aria-hidden="true">
-  <defs>
-    <g id="i-home"><path d="M3 9.5 10 4l7 5.5V16a1 1 0 0 1-1 1h-3v-5H7v5H4a1 1 0 0 1-1-1z"/></g>
-    <g id="i-shield"><path d="M10 3l6 2.3v4.4c0 3.4-2.4 6.4-6 7.3-3.6-.9-6-3.9-6-7.3V5.3z"/><path d="M7.6 10.2 9.3 12l3.3-3.4"/></g>
-    <g id="i-sun"><circle cx="10" cy="10" r="4"/><path d="M10 2v2M10 16v2M18 10h-2M4 10H2M15.66 4.34l-1.42 1.42M5.76 14.24l-1.42 1.42M15.66 15.66l-1.42-1.42M5.76 5.76L4.34 4.34"/></g>
-    <g id="i-moon"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></g>
-  </defs>
-</svg>
-
-<nav class="rail" aria-label="Primary">
-  <div class="nav">
-    <a class="rail-btn" href="/" data-tip="Assistant Chat" aria-label="Assistant"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-home"/></svg></a>
-    <a class="rail-btn active" href="/dashboard" data-tip="Sentinel-Z Dashboard" aria-current="page" aria-label="Sentinel-Z dashboard"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-shield"/></svg></a>
+<header class="bar">
+  <a class="brand" href="/dashboard" aria-label="Sentinel-Z">
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 2.5 20 5.6v5.6c0 4.6-3.2 8.6-8 10.3-4.8-1.7-8-5.7-8-10.3V5.6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8.6 12.2l2.4 2.4 4.6-4.9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span>Sentinel-Z</span>
+  </a>
+  <span class="tagline">one decision per tool call, enforced below the agent</span>
+  <div class="bar-right">
+    <span class="chip" id="chip-backend">connecting…</span>
+    <span class="chip warn hidden" id="chip-profile" title="The agent is set to obey instructions it finds in untrusted content. This is a simulated weakness, not a measurement of the model.">Simulated susceptible agent</span>
+    <span class="chip" id="chip-pay">payments —</span>
+    <label class="switch" title="Turn the defense on or off for the next run">
+      <input type="checkbox" id="tgl-defense" checked>
+      <span class="track"><span class="knob"></span></span>
+      <span class="switch-label" id="lbl-defense">Defense on</span>
+    </label>
+    <a class="btn ghost" href="/" target="aura">Open chat</a>
+    <button class="btn ghost icon" id="btn-theme" type="button" aria-label="Toggle light or dark theme">◐</button>
   </div>
-  <div class="grow"></div>
-  <div class="nav">
-    <button class="rail-btn" id="btn-theme" type="button" data-tip="Toggle Theme" aria-label="Toggle Theme">
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-sun"/></svg>
-    </button>
-  </div>
-</nav>
+</header>
 
-<main>
-  <header class="topbar">
-    <span class="name">Sentinel-Z</span>
-    <span class="sub">hybrid learned-observation POMDP · one decision per tool call</span>
-    <div class="right">
-      <span class="pill" id="pill-backend">connecting</span>
-      <span class="pill" id="pill-policy">policy —</span>
+<div class="stage">
+
+  <aside class="script" aria-label="Demo scenarios">
+    <h2>Run of show</h2>
+    <div id="scenarios"><p class="empty">Loading scenarios…</p></div>
+
+    <h2>Controls</h2>
+    <div class="controls">
+      <div class="seg" role="group" aria-label="Agent profile">
+        <button type="button" data-profile="natural" class="on">Natural agent</button>
+        <button type="button" data-profile="susceptible">Susceptible agent</button>
+      </div>
+      <button class="btn" id="btn-tamper" type="button">Tamper with the log</button>
+      <button class="btn" id="btn-reset" type="button">Reset session</button>
     </div>
-  </header>
+    <p class="hint">Scenarios set the profile and defense for that run only. The chat page shows the same session from the user's side.</p>
+  </aside>
 
-  <div class="scroll">
-    <div class="board">
+  <main class="main">
 
-      <section class="panel full">
-        <div class="kpis">
-          <div class="kpi"><div class="k">calls reviewed</div><div class="v" id="k-calls">0</div></div>
-          <div class="kpi"><div class="k">allowed</div><div class="v" id="k-allowed">0</div></div>
-          <div class="kpi"><div class="k">intervened</div><div class="v" id="k-acted">0</div></div>
-          <div class="kpi"><div class="k">records leaked</div><div class="v" id="k-leaked">0</div></div>
-          <div class="kpi"><div class="k">session state</div><div class="v"><span class="tag BENIGN" id="k-state">BENIGN</span></div></div>
+    <section class="narration" id="narration" aria-live="polite">
+      <div class="now">
+        <span class="eyebrow" id="nar-eyebrow">Ready</span>
+        <h1 id="nar-title">Pick a scenario, or use the chat.</h1>
+        <p id="nar-text">Every tool call the assistant makes is reviewed here before it runs.</p>
+      </div>
+      <div class="kpis">
+        <div class="kpi"><span class="k">Calls reviewed</span><span class="v" id="k-calls">0</span></div>
+        <div class="kpi"><span class="k">Intervened</span><span class="v" id="k-acted">0</span></div>
+        <div class="kpi"><span class="k">Decision time</span><span class="v"><span id="k-latency">—</span><small> ms</small></span></div>
+        <div class="kpi"><span class="k">Records leaked</span><span class="v" id="k-leaked">0</span></div>
+      </div>
+    </section>
+
+    <!-- ============================== single-session view -->
+    <div class="view" id="view-single">
+
+      <section class="card token-card" id="token-card" data-state="alive">
+        <div class="card-head"><h2>Capability token</h2><span class="tag ok" id="token-status">ALIVE</span></div>
+        <div class="token">
+          <div class="token-plate" id="token-plate">
+            <svg class="cracks" viewBox="0 0 300 120" preserveAspectRatio="none" aria-hidden="true">
+              <path d="M148 0 138 34 160 52 131 78 150 120"/>
+              <path d="M138 34 92 44 60 30 0 46"/>
+              <path d="M160 52 214 40 252 62 300 50"/>
+              <path d="M131 78 84 92 40 120"/>
+              <path d="M131 78 190 96 232 120"/>
+            </svg>
+            <div class="token-top"><span class="token-label">SESSION TOKEN</span><span class="token-id" id="token-id">live-········</span></div>
+            <div class="token-scopes" id="token-scopes">All tools in scope</div>
+            <div class="token-limit" id="token-limit">No spend limit set</div>
+            <div class="stamp" aria-hidden="true">DESTROYED</div>
+          </div>
+          <p class="token-note" id="token-note">The agent can only act through this token. Revoking it stops every tool at once.</p>
         </div>
       </section>
 
-      <section class="panel third">
-        <h2>Signals (5 Detectors)</h2>
-        <div id="signals"><p class="empty">No call has been reviewed yet.</p></div>
+      <section class="card state-card">
+        <div class="card-head"><h2>Where the session is heading</h2><span class="tag" id="state-tag">BENIGN</span></div>
+        <div class="track" id="track"></div>
+        <p class="caption">Belief over five states, updated after every call. <span id="absorb-text"></span></p>
       </section>
 
-      <section class="panel third">
-        <h2>Latest Decision</h2>
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-          <span class="tag" id="d-action">—</span>
+      <section class="card wallet-card" id="wallet-card">
+        <div class="card-head"><h2>Agent's wallet</h2><span class="tag" id="mandate-tag">no purchase yet</span></div>
+        <div class="money"><span class="cur">₹</span><span id="w-balance">5,000</span></div>
+        <div class="wallet-bar"><span id="w-bar"></span><i id="w-limit" class="hidden"></i></div>
+        <div class="wallet-foot"><span id="w-foot">Opening balance ₹5,000</span></div>
+        <div class="saved hidden" id="saved"><span class="saved-n" id="saved-n">₹4,999</span><span class="saved-t">kept out of an attacker's hands</span></div>
+      </section>
+
+      <section class="card timeline-card">
+        <div class="card-head">
+          <h2>Flight recorder</h2>
+          <button class="btn tiny hidden" id="btn-live" type="button">Back to live</button>
         </div>
-        <p class="empty" id="d-why" style="margin:0 0 16px">Waiting for a tool call.</p>
-        <h2>Hazard Probability <span id="d-hazard" style="font-variant-numeric:tabular-nums">0.000</span></h2>
-        <svg class="sparkline" id="spark" viewBox="0 0 300 54" preserveAspectRatio="none" aria-hidden="true"></svg>
+        <ol class="timeline" id="timeline"><li class="empty">No tool call yet.</li></ol>
       </section>
 
-      <section class="panel third">
-        <h2>Expected cost per action <span style="text-transform:none;font-weight:400">— lowest wins</span></h2>
-        <div id="costs"><p class="empty">No policy evaluation yet.</p></div>
-        <h2 style="margin-top:16px">P(harm within n steps)</h2>
-        <div id="absorption"><p class="empty">—</p></div>
+      <section class="card">
+        <div class="card-head"><h2>Five signals</h2><span class="sub" id="sig-step"></span></div>
+        <div id="signals" class="meters"></div>
       </section>
 
-      <section class="panel">
-        <h2>What left the boundary (Exfiltration Sink)</h2>
-        <div class="wire" id="wire"><span class="none">nothing has left the boundary</span></div>
+      <section class="card">
+        <div class="card-head"><h2>Decision</h2><span class="tag" id="d-action">—</span></div>
+        <p class="why" id="d-why">Waiting for a tool call.</p>
+        <div class="sub-head">Risk of harm <b id="d-hazard">0.00</b></div>
+        <svg class="spark" id="spark" viewBox="0 0 300 60" preserveAspectRatio="none" role="img" aria-label="Hazard over the session"></svg>
+        <div class="sub-head">Expected cost of each response <span class="sub">lowest wins</span></div>
+        <div id="costs" class="meters compact"></div>
       </section>
 
-      <section class="panel">
-        <h2>Decision log (SHA-256 Hash Chain)</h2>
-        <div style="max-height:220px;overflow-y:auto">
-          <table class="log">
-            <thead><tr><th>#</th><th>tool</th><th>action</th><th>state</th><th>hazard</th></tr></thead>
-            <tbody id="log"></tbody>
-          </table>
+      <section class="card source-card">
+        <div class="card-head"><h2>Agent's view</h2>
+          <label class="check"><input type="checkbox" id="tgl-reveal"> Reveal hidden text</label>
         </div>
+        <div class="browser">
+          <div class="browser-bar"><i></i><i></i><i></i><span id="browser-url">sparrowmart.local/shop</span></div>
+          <div class="browser-view"><iframe id="browser-frame" title="The page the agent is reading" src="/shop" loading="lazy"></iframe></div>
+        </div>
+        <blockquote class="poison hidden" id="poison">
+          <span class="poison-label">The text that poisoned this session</span>
+          <span id="poison-text"></span>
+        </blockquote>
       </section>
 
+      <section class="card">
+        <div class="card-head"><h2>What reached the attacker</h2><span class="tag ok" id="wire-tag">nothing</span></div>
+        <pre class="wire" id="wire">Nothing has left the boundary.</pre>
+      </section>
+
+      <section class="card chain-card">
+        <div class="card-head"><h2>Evidence chain</h2><span class="tag ok" id="chain-tag">verified</span></div>
+        <div class="chain" id="chain"><span class="empty">Each decision is hashed into the one before it.</span></div>
+        <p class="caption" id="chain-note">SHA-256, each record commits to all history before it.</p>
+      </section>
     </div>
-  </div>
-</main>
 
-<script src="/static/vendor/motion.min.js"></script>
-<script src="/static/dashboard.js"></script>
+    <!-- ================================= side-by-side view -->
+    <div class="view hidden" id="view-twin">
+      <section class="lane bad" id="lane-undefended">
+        <header><span class="lane-kicker">Without Sentinel-Z</span><span class="tag" data-role="status">running</span></header>
+        <div class="money"><span class="cur">₹</span><span data-role="balance">5,000</span></div>
+        <div class="wallet-bar"><span data-role="bar"></span></div>
+        <ol class="calls" data-role="calls"></ol>
+        <p class="verdict" data-role="verdict"></p>
+      </section>
+      <section class="lane good" id="lane-defended">
+        <header><span class="lane-kicker">With Sentinel-Z</span><span class="tag" data-role="status">running</span></header>
+        <div class="money"><span class="cur">₹</span><span data-role="balance">5,000</span></div>
+        <div class="wallet-bar"><span data-role="bar"></span></div>
+        <ol class="calls" data-role="calls"></ol>
+        <p class="verdict" data-role="verdict"></p>
+      </section>
+      <section class="card twin-foot">
+        <blockquote class="poison hidden" id="twin-poison">
+          <span class="poison-label">The text both agents read</span>
+          <span id="twin-poison-text"></span>
+        </blockquote>
+        <button class="btn" id="btn-twin-close" type="button">Back to the single view</button>
+      </section>
+    </div>
+
+  </main>
+</div>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script src="/static/dashboard.js?v=2"></script>
 </body>
 </html>

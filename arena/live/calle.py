@@ -164,6 +164,24 @@ class CalleService:
         )
 
         idem_key = f"sentinelz-call-{uuid.uuid4().hex}"
+
+        # Dry run is the default: a demo must never ring a real phone by
+        # accident. Same record, same events, no HTTP request.
+        if config.CALLE_DRY_RUN:
+            record = {
+                "ok": True,
+                "dispatched": True,
+                "dry_run": True,
+                "call_id": f"dryrun-{idem_key[-8:]}",
+                "status": "simulated",
+                "phone": target_phone,
+                "recipient": clean_recipient,
+                "message": clean_message,
+                "task": call_task,
+            }
+            self.latest_call = record
+            return record
+
         v2_body: dict[str, Any] = {
             "phone": target_phone,
             "task": call_task,

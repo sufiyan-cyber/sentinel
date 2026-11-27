@@ -68,7 +68,7 @@ Sentinel-Z Arena separates concerns across four distinct planes:
 ### 3.1 The Agent Plane
 Hosts the target agent executing user tasks. It can be powered by:
 - **Ollama** (local open-weights, default `llama3.1:8b` via `OLLAMA_BASE_URL`).
-- **NVIDIA NIM** (cloud inference, `meta/llama-3.2-11b-vision-instruct`).
+- **NVIDIA NIM** (cloud inference, `nvidia/nemotron-3.5-bolt-e4b`; the earlier `meta/llama-3.2-11b-vision-instruct` was retired by the provider).
 - **Gemini** (Google API via OpenAI-compatible client, `gemini-2.5-flash` or `gemini-3.5-flash-lite`).
 - **Scripted Backend** (`ScriptedLLM`): A deterministic baseline walking AgentDojo ground truth and template-based injection probabilities (`configs/scripted_backend.json`), requiring no GPU, network, or external process.
 
