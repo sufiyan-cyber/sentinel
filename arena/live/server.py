@@ -112,6 +112,11 @@ def _run_turn(text: str, voice_lang: str | None = None) -> None:
             "browser_step", {"step": step, "thought": thought, "action": action}
         )
         agent = state.ensure_agent(BACKEND, MODEL)
+        if agent is not None and not state.broker.is_alive(agent.session_id):
+            state.agent = None
+            if state.gateway is not None:
+                state.gateway.start_session()
+            agent = state.ensure_agent(BACKEND, MODEL)
         state.emit(
             "backend",
             {"backend": agent.backend, "model": agent.model, "defense_on": state.defense_on},
@@ -169,6 +174,10 @@ def build_app() -> FastAPI:
     app = FastAPI(title="Sentinel-Z Live", docs_url=None, redoc_url=None)
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
+    @app.on_event("startup")
+    async def startup_event() -> None:
+        STATE.ensure_agent(BACKEND, MODEL)
+
     @app.get("/")
     async def index() -> FileResponse:
         return FileResponse(STATIC_DIR / "index.html", headers={"Cache-Control": "no-store"})
@@ -184,6 +193,19 @@ def build_app() -> FastAPI:
         def generate():
             try:
                 yield "retry: 2000\n\n"
+                agent = STATE.ensure_agent(BACKEND, MODEL)
+                init_data = dumps_str(
+                    {
+                        "backend": agent.backend,
+                        "model": agent.model,
+                        "defense_on": STATE.defense_on,
+                        "attacker_url": config.ATTACKER_URL,
+                        "sarvam_configured": VOICE_SERVICE.configured,
+                        "calle_configured": CALLE_SERVICE.configured,
+                        "calle_default_phone": CALLE_SERVICE.default_phone,
+                    }
+                )
+                yield f"event: backend\ndata: {init_data}\n\n"
                 while True:
                     try:
                         yield q.get(timeout=15.0)

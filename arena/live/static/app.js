@@ -14,9 +14,15 @@ const canAnimate = Boolean(animate) && !reduced;
 
 let trace = null;
 let busy = false;
-let currentBackend = "auto";
-let currentModel = "";
+let currentBackend = "nvidia";
+let currentModel = "meta/llama-3.2-11b-vision-instruct";
 let sessionHistory = [];
+
+const initPill = $("pill-backend");
+if (initPill && initPill.textContent.trim() === "connecting") {
+  initPill.textContent = "NVIDIA (Llama-3.2-11B)";
+  initPill.className = "pill ok";
+}
 
 const TOOL = {
   list_files:          { icon: "i-folder", verb: "Listing workspace documents" },
@@ -174,7 +180,7 @@ const DEFAULT_EMAILS = [
 
 // Files Drawer
 $("btn-nav-files").onclick = openFilesDrawer;
-$("btn-samples").onclick = openFilesDrawer;
+if ($("btn-samples")) $("btn-samples").onclick = openFilesDrawer;
 
 async function openFilesDrawer() {
   closeAllPanels();
@@ -827,31 +833,37 @@ async function send(text, voiceOpts = null) {
 const source = new EventSource("/events");
 
 function setBackend(d) {
+  if (!d) return;
   currentBackend = d.backend || "nvidia";
   currentModel = d.model || "";
   const b = $("pill-backend");
-  if (d.backend === "nvidia") {
-    b.textContent = `NVIDIA (Llama-3.2-11B)`;
-    b.className = "pill ok";
-  } else if (d.backend === "gemini") {
-    b.textContent = `Gemini (${d.model || "gemini-3.6-flash"})`;
-    b.className = "pill ok";
-  } else if (d.backend === "ollama") {
-    b.textContent = `Ollama (${d.model || "llama3.1:8b"})`;
-    b.className = "pill ok";
-  } else if (d.backend === "scripted") {
-    b.textContent = "Scripted (Offline)";
-    b.className = "pill warn";
-  } else {
-    b.textContent = `NVIDIA (Llama-3.2-11B)`;
-    b.className = "pill ok";
+  if (b) {
+    if (d.backend === "nvidia") {
+      b.textContent = `NVIDIA (Llama-3.2-11B)`;
+      b.className = "pill ok";
+    } else if (d.backend === "gemini") {
+      b.textContent = `Gemini (${d.model || "gemini-3.6-flash"})`;
+      b.className = "pill ok";
+    } else if (d.backend === "ollama") {
+      b.textContent = `Ollama (${d.model || "llama3.1:8b"})`;
+      b.className = "pill ok";
+    } else if (d.backend === "scripted") {
+      b.textContent = "Scripted (Offline)";
+      b.className = "pill warn";
+    } else {
+      b.textContent = `NVIDIA (Llama-3.2-11B)`;
+      b.className = "pill ok";
+    }
   }
 
   if (d.defense_on !== undefined) {
     const p = $("pill-defense");
-    p.innerHTML = `<span class="led"></span>${d.defense_on ? "Sentinel-Z active" : "Sentinel-Z off"}`;
-    p.className = d.defense_on ? "pill ok" : "pill danger";
-    $("tgl-defense").checked = d.defense_on;
+    if (p) {
+      p.innerHTML = `<span class="led"></span>${d.defense_on ? "Sentinel-Z active" : "Sentinel-Z off"}`;
+      p.className = d.defense_on ? "pill ok" : "pill danger";
+    }
+    const tgl = $("tgl-defense");
+    if (tgl) tgl.checked = d.defense_on;
   }
   if (d.attacker_url) {
     const s = $("setting-sink");

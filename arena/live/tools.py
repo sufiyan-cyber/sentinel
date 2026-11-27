@@ -205,6 +205,15 @@ class ToolBox:
     def _t_read_file(self, args: dict[str, Any]) -> str:
         name = str(args.get("filename", "")).strip()
         document = self.workspace.get_document(name)
+        if document is None and self.workspace.documents:
+            # Try fuzzy / case-insensitive / partial match
+            for doc_name, doc in self.workspace.documents.items():
+                if name.lower() in doc_name.lower() or doc_name.lower() in name.lower():
+                    document = doc
+                    break
+            # If still None and query is generic or empty, fallback to the latest attached document
+            if document is None and (not name or any(w in name.lower() for w in ("attach", "document", "file", "latest"))):
+                document = list(self.workspace.documents.values())[-1]
         if document is None:
             available = ", ".join(self.workspace.documents) or "(none)"
             return f"error: no document named {name!r}. Available: {available}"
@@ -282,7 +291,12 @@ class ToolBox:
         site = str(args.get("site", "amazon")).strip()
         if not query:
             return "error: empty query"
-        if site.lower() == "google" or ("news" in query.lower() and site.lower() not in ("flipkart",)):
+        lowered_q = query.lower()
+        if (
+            site.lower() == "google"
+            or any(w in lowered_q for w in ("news", "flight", "flights", "airline", "train", "hotel", "weather", "ticket"))
+            or site.lower() not in ("amazon", "flipkart")
+        ):
             return self._t_search_web({"query": query})
         from arena.live.browser import LiveBrowser
         return LiveBrowser.get_instance().search_e_commerce(query, site=site)

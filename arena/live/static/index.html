@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Aura — AI Workspace Assistant</title>
-<link rel="stylesheet" href="/static/style.css?v=4">
+<link rel="stylesheet" href="/static/style.css?v=5">
 </head>
 <body>
 
@@ -80,7 +80,7 @@
     <span class="name">Aura</span>
     <span class="sub">personal workspace assistant</span>
     <div class="right">
-      <button class="pill" id="pill-backend" style="cursor:pointer;" title="Click to change AI model">connecting</button>
+      <button class="pill ok" id="pill-backend" style="cursor:pointer;" title="Click to change AI model">NVIDIA (Llama-3.2-11B)</button>
       <a class="pill ok" id="pill-defense" href="/dashboard" target="_blank"><span class="led"></span>Sentinel-Z active</a>
     </div>
   </header>
@@ -109,11 +109,6 @@
           <button class="tool" type="button" id="btn-doc" title="Attach document to workspace">
             <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-clip"/></svg>
             Attach File
-          </button>
-          <button class="tool" type="button" id="btn-samples" title="Load Demo Attack Fixtures or Emails">
-            <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-flask"/></svg>
-            Demo Fixtures
-            <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-chevron"/></svg>
           </button>
           <div class="voice-group" title="Speak to Aura in any language (powered by Sarvam AI)">
             <button class="tool voice-btn" type="button" id="btn-voice" aria-label="Voice input">
@@ -326,7 +321,7 @@
 <!-- Scripts -->
 <script src="/static/vendor/three.min.js"></script>
 <script src="/static/vendor/motion.min.js"></script>
-<script src="/static/orb.js?v=4"></script>
-<script src="/static/app.js?v=4"></script>
+<script src="/static/orb.js?v=5"></script>
+<script src="/static/app.js?v=5"></script>
 </body>
 </html>
